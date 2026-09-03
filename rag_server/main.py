@@ -10,10 +10,22 @@ import utils  # First import utils
 import crawling  # Then import crawling
 from crawling import NewsItemResponse  # Import specific classes
 import config  # Config import is fine
+import hybrid_search  # Dense+BM25 하이브리드 검색
 import rag_report_pipeline  # Import RAG pipeline last since it depends on utils
 
 # --- FastAPI App Initialization ---
 app = FastAPI(title="RAG Corporate Analysis Report Generator")
+
+
+@app.on_event("startup")
+async def prewarm_hybrid_search_index():
+    """BM25 스파스 인덱스를 서버 기동 시 미리 구축해, 첫 보고서 생성 요청이 인덱스
+    빌드 시간만큼 느려지는 걸 피한다. 실패해도 서버는 그대로 뜨고, 검색 시점에 재시도한다."""
+    try:
+        utils.ensure_milvus_connection()
+        hybrid_search.build_bm25_index()
+    except Exception as e:
+        print(f"[WARN] BM25 인덱스 사전 구축 실패 (첫 검색 요청 시 재시도됩니다): {e}")
 
 # --- Pydantic Models (for potential future request/response structure) ---
 class ReportRequest(BaseModel):

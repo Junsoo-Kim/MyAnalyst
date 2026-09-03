@@ -1,0 +1,20 @@
+# 복사해서 terraform.tfvars로 저장한 뒤 값을 채우세요.
+#   cp terraform.tfvars.example terraform.tfvars
+# terraform.tfvars는 .gitignore에 등록되어 있습니다 (커밋 금지).
+
+aws_region  = "ap-northeast-2"
+environment = "prod"
+
+# --- 필수: 미리 콘솔/CLI로 만들어둔 OpenAI API 키 시크릿의 ARN ---
+#   aws secretsmanager create-secret --name myanalyst-prod/openai-api-key --secret-string "sk-..."
+openai_api_key_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:myanalyst-prod/openai-api-key-XXXXXX"
+
+# --- 선택 ---
+# management_cidr     = "203.0.113.10/32"   # Milvus EC2 SSH 접근 허용 IP (확인: curl ifconfig.me)
+# milvus_key_name     = "my-ec2-keypair"    # Milvus EC2 SSH 키페어
+# fe_origin           = "http://localhost:3000"
+# alarm_email         = "you@example.com"   # CloudWatch 알람 수신 이메일
+# be_image_tag        = "latest"
+# rag_image_tag       = "latest"
+# acm_certificate_arn = "arn:aws:acm:ap-northeast-2:123456789012:certificate/xxxx" # 도메인 생기면 채우기 - HTTPS 활성화
+# github_repo         = "Junsoo-Kim/MyAnalyst"  # GitHub Actions OIDC 배포 역할을 쓸 repo

@@ -15,6 +15,8 @@ import khu_swcon.myanalyst.repository.ReportRepository;
 import khu_swcon.myanalyst.repository.UserRepository;
 import khu_swcon.myanalyst.repository.DictionaryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -40,9 +42,14 @@ public class ReportService {
     private final DictionaryRepository dictionaryRepository;
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
-    
+
+    // RAG(FastAPI) 서버 주소. 로컬은 localhost:8000, 컨테이너/클라우드에서는
+    // RAG_SERVER_BASE_URL 환경 변수로 서비스 디스커버리 이름을 주입합니다.
+    @Value("${rag.server.base-url}")
+    private String ragServerBaseUrl;
+
     @Autowired
-    public ReportService(ReportRepository reportRepository, 
+    public ReportService(ReportRepository reportRepository,
                         UserRepository userRepository, 
                         DictionaryRepository dictionaryRepository) {
         this.reportRepository = reportRepository;
@@ -121,7 +128,7 @@ public class ReportService {
         // API 호출 및 응답 처리
         try {
             Map<String, Object> response = webClient.post()
-                    .uri("http://localhost:8000/reports")
+                    .uri(ragServerBaseUrl + "/reports")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
@@ -235,12 +242,14 @@ public class ReportService {
      * @param company 회사명
      * @return 뉴스 정보 목록
      */
+    // 같은 회사에 대한 반복 요청은 RAG 서버(->네이버 크롤링)를 다시 타지 않고 Redis 캐시에서 응답한다.
+    @Cacheable(cacheNames = "news", key = "#company")
     @Transactional(readOnly = true)
     public List<NewsDto> getNewsByCompany(String company) {
         try {
             // API 호출 및 응답 처리
             return webClient.get()
-                    .uri("http://localhost:8000/news/{company}", company)
+                    .uri(ragServerBaseUrl + "/news/{company}", company)
                     .retrieve()
                     .bodyToFlux(NewsDto.class)
                     .collectList()
@@ -256,12 +265,14 @@ public class ReportService {
      * @param company 회사명
      * @return 주식 정보
      */
+    // 주가는 뉴스보다 실시간성이 중요하므로 캐시 TTL을 짧게(1분) 잡아둔다 (RedisCacheConfig 참고).
+    @Cacheable(cacheNames = "stocks", key = "#company")
     @Transactional(readOnly = true)
     public StockDto getStockByCompany(String company) {
         try {
             // API 호출 및 응답 처리
             return webClient.get()
-                    .uri("http://localhost:8000/stocks/{company}", company)
+                    .uri(ragServerBaseUrl + "/stocks/{company}", company)
                     .retrieve()
                     .bodyToMono(StockDto.class)
                     .block(); // 동기적으로 응답 대기
@@ -280,7 +291,7 @@ public class ReportService {
         try {
             // API 호출 및 응답 처리
             byte[] imageBytes = webClient.get()
-                    .uri("http://localhost:8000/stocks/{company}/chart-image", company)
+                    .uri(ragServerBaseUrl + "/stocks/{company}/chart-image", company)
                     .accept(MediaType.IMAGE_PNG, MediaType.IMAGE_JPEG, MediaType.APPLICATION_OCTET_STREAM)
                     .retrieve()
                     .bodyToMono(byte[].class)
