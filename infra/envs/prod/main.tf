@@ -1,5 +1,3 @@
-# 계정마다 AZ 이름<->물리 위치 매핑이 다르므로 "ap-northeast-2a"처럼 하드코딩하지 않고
-# 실제 사용 가능한 AZ 중 앞의 2개를 골라 씁니다.
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -17,8 +15,6 @@ module "network" {
   public_subnet_cidrs  = ["10.0.0.0/24", "10.0.1.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
 
-  # 개인 프로젝트 기본값: NAT Gateway 1개 공유로 비용 절감.
-  # 고가용성을 우선하려면 false로 바꿔 AZ마다 NAT를 하나씩 둡니다.
   single_nat_gateway = true
 
   management_cidr = var.management_cidr
@@ -33,9 +29,6 @@ locals {
   tags        = { Environment = var.environment }
 }
 
-# =========================================================
-# 데이터 계층
-# =========================================================
 module "rds" {
   source = "../../modules/rds"
 
@@ -64,9 +57,6 @@ module "milvus_ec2" {
   tags              = local.tags
 }
 
-# =========================================================
-# 컨테이너 이미지 레지스트리
-# =========================================================
 module "ecr_be" {
   source = "../../modules/ecr"
   name   = "${local.name_prefix}-be"
@@ -79,9 +69,6 @@ module "ecr_rag" {
   tags   = local.tags
 }
 
-# =========================================================
-# 컴퓨트: ECS Fargate 클러스터 + ALB
-# =========================================================
 module "ecs_cluster" {
   source = "../../modules/ecs-cluster"
 
@@ -101,7 +88,6 @@ module "alb" {
   tags                = local.tags
 }
 
-# --- BE(Spring Boot): ALB 뒤, 온디맨드 100% (항상 안정적으로 응답해야 하는 진입점) ---
 module "ecs_service_be" {
   source = "../../modules/ecs-service"
 
@@ -119,7 +105,7 @@ module "ecs_service_be" {
   memory         = 1024
 
   environment = {
-    RAG_SERVER_BASE_URL        = "http://rag-server:8000" # Service Connect discovery name
+    RAG_SERVER_BASE_URL        = "http://rag-server:8000"
     CORS_ALLOWED_ORIGINS       = var.fe_origin
     REDIS_HOST                 = module.elasticache.redis_endpoint
     REDIS_PORT                 = tostring(module.elasticache.redis_port)
@@ -127,12 +113,10 @@ module "ecs_service_be" {
     SPRING_DATASOURCE_USERNAME = "postgres"
   }
   secrets = {
-    # RDS가 Secrets Manager에 만든 JSON({username,password})에서 password 키만 추출해 주입
     SPRING_DATASOURCE_PASSWORD = "${module.rds.master_user_secret_arn}:password::"
   }
 
   target_group_arn = module.alb.be_target_group_arn
-  # BE는 서비스 진입점이라 항상 온디맨드로만 - Spot으로 회수되어 순간적으로 죽는 걸 피한다.
   capacity_provider_strategy = [
     { capacity_provider = "FARGATE", weight = 1, base = 1 },
   ]
@@ -142,7 +126,6 @@ module "ecs_service_be" {
   tags = local.tags
 }
 
-# --- RAG(FastAPI): 내부 전용(ALB 없음), 임베딩 연산이라 Spot 위주로 비용 절감 ---
 module "ecs_service_rag" {
   source = "../../modules/ecs-service"
 
@@ -156,9 +139,8 @@ module "ecs_service_rag" {
 
   image          = "${module.ecr_rag.repository_url}:${var.rag_image_tag}"
   container_port = 8000
-  # 임베딩(KLUE-BERT) 추론이 CPU/메모리를 더 쓰므로 BE보다 넉넉하게
-  cpu    = 2048
-  memory = 4096
+  cpu            = 2048
+  memory         = 4096
 
   environment = {
     MILVUS_HOST = module.milvus_ec2.private_ip
@@ -168,8 +150,7 @@ module "ecs_service_rag" {
     OPENAI_API_KEY = var.openai_api_key_secret_arn
   }
 
-  target_group_arn = null # ALB에 노출하지 않음 - BE에서만 Service Connect로 접근
-  # 첫 태스크(base=1)는 온디맨드로 안정성 확보, 나머지 스케일아웃 분은 Spot으로 비용 절감
+  target_group_arn = null
   capacity_provider_strategy = [
     { capacity_provider = "FARGATE", weight = 1, base = 1 },
     { capacity_provider = "FARGATE_SPOT", weight = 4, base = 0 },
@@ -180,9 +161,6 @@ module "ecs_service_rag" {
   tags = local.tags
 }
 
-# =========================================================
-# CI/CD: GitHub Actions가 AWS 장기 액세스키 없이(OIDC) 이 계정에 배포할 수 있는 역할
-# =========================================================
 module "github_oidc" {
   source = "../../modules/github-oidc"
 
@@ -200,9 +178,6 @@ module "github_oidc" {
   tags = local.tags
 }
 
-# =========================================================
-# 관측성
-# =========================================================
 module "observability" {
   source = "../../modules/observability"
 

@@ -1,9 +1,5 @@
 name: Deploy to AWS
 
-# BE/RAG 이미지를 빌드해 ECR에 푸시하고, ECS 서비스에 새 태스크 정의로 배포한다.
-# AWS 인증은 장기 액세스키 대신 OIDC로 infra/modules/github-oidc가 만든 역할을 임시로 assume한다
-# (repo Settings > Secrets and variables > Actions에 AWS_DEPLOY_ROLE_ARN을
-#  `terraform output github_actions_deploy_role_arn` 값으로 등록해야 동작함).
 on:
   push:
     branches: [main]
@@ -14,13 +10,11 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  id-token: write # OIDC 토큰 발급에 필요
+  id-token: write
   contents: read
 
 env:
   AWS_REGION: ap-northeast-2
-  # infra/envs/prod의 name_prefix("myanalyst-${var.environment}", 기본 environment=prod)와
-  # 반드시 맞춰야 한다. environment를 바꿔 배포한다면 여기도 같이 바꿀 것.
   NAME_PREFIX: myanalyst-prod
 
 jobs:
@@ -58,9 +52,6 @@ jobs:
           docker push "$REGISTRY/$REPOSITORY:$TAG"
           docker push "$REGISTRY/$REPOSITORY:latest"
 
-      # describe-task-definition의 출력은 register-task-definition에 그대로 넣기엔
-      # taskDefinitionArn/revision/status 등 부가 필드가 섞여 있는데, 아래 render/deploy
-      # 액션 조합이 이 필드들을 알아서 걸러내고 이미지만 바꿔 새 리비전을 등록해준다.
       - name: Fetch current task definition
         run: |
           aws ecs describe-task-definition \

@@ -18,7 +18,6 @@ resource "aws_ecr_repository" "this" {
   tags = merge(var.tags, { Name = var.name })
 }
 
-# 오래된 이미지가 쌓여 저장 비용이 늘어나는 걸 막는다: 최신 10개만 보관.
 resource "aws_ecr_lifecycle_policy" "this" {
   repository = aws_ecr_repository.this.name
 

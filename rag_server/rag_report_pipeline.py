@@ -50,20 +50,14 @@ def save_debug_info(section_number, section_title, keywords, retrieved_data, pro
         print(f"Error saving debug info: {e}")
 
 def generate_report_section(section_number: str, section_title: str, report_params: Dict, subsections: Dict = None) -> str:
-    """섹션 하나를 생성한다. config.CORRECTIVE_RAG_ENABLED에 따라 두 구현 중 하나로 위임한다.
-
-    - True(기본값): corrective_rag_graph의 LangGraph 파이프라인 - 검색 결과/생성물을 스스로
-      채점하고, 근거가 부족하면 쿼리를 재작성해 재검색하는 루프가 있다.
-    - False: 예전 선형 파이프라인(_generate_report_section_legacy) - 문제 생길 때 즉시 되돌아갈 수 있게 유지.
-    """
+    """Generates content for a single report section using the RAG pipeline."""
     if config.CORRECTIVE_RAG_ENABLED:
         return _generate_report_section_graph(section_number, section_title, report_params, subsections)
     return _generate_report_section_legacy(section_number, section_title, report_params, subsections)
 
 
 def _generate_report_section_graph(section_number: str, section_title: str, report_params: Dict, subsections: Dict = None) -> str:
-    """corrective_rag_graph.py의 LangGraph 그래프로 섹션을 생성한다."""
-    import corrective_rag_graph  # main.py 순환 임포트를 피하려고 함수 안에서 지연 임포트
+    import corrective_rag_graph
 
     print(f"\n--- Generating Section {section_number}: {section_title} (corrective RAG graph) ---")
     start_time = time.time()
@@ -90,8 +84,6 @@ def _generate_report_section_graph(section_number: str, section_title: str, repo
     }
 
     graph = corrective_rag_graph.get_section_graph()
-    # 재시도마다 retrieve/grade_documents/generate_section/grade_hallucination을 다시 거치므로,
-    # 그래프 자체의 재귀 한도는 MAX_GROUNDING_RETRIES보다 여유 있게 잡아둔다.
     final_state = graph.invoke(initial_state, config={"recursion_limit": 25})
 
     section_content = final_state["draft"]
@@ -115,7 +107,6 @@ def _generate_report_section_graph(section_number: str, section_title: str, repo
 
 
 def _generate_report_section_legacy(section_number: str, section_title: str, report_params: Dict, subsections: Dict = None) -> str:
-    """Corrective RAG 도입 이전의 선형 파이프라인. CORRECTIVE_RAG_ENABLED=false일 때만 쓰인다."""
     print(f"\n--- Generating Section {section_number}: {section_title} ---")
     start_time = time.time()
 
@@ -156,7 +147,7 @@ def _generate_report_section_legacy(section_number: str, section_title: str, rep
         return f"### {section_number}. {section_title}\n\n키워드 임베딩 중 오류 발생.\n"
     print("Keyword embedding complete.")
 
-    # 3. Hybrid Search (Dense/Milvus + Sparse/BM25 -> RRF)
+    # 3. Search Milvus
     print("Searching for relevant context (hybrid: dense + BM25 + RRF)...")
     retrieved_data = hybrid_search.hybrid_search(
         query_text=keywords,

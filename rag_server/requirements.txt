@@ -11,11 +11,9 @@ grpcio<=1.67.1,>=1.49.1 # Specific version constraint from notebook
 ujson>=2.0.0        # Specific version constraint from notebook
 pandas>=1.2.4       # Specific version constraint from notebook
 
-# 아래 4개는 crawling.py / main.py가 실제로 import하지만 누락되어 있던 의존성.
-# 이 상태로는 컨테이너/클린 환경에서 `import crawling` 시점에 바로 죽습니다.
-beautifulsoup4>=4.12.0  # crawling.py의 BeautifulSoup
-requests>=2.31.0        # crawling.py의 HTTP 요청
-lxml>=4.9.0              # crawling.py가 BeautifulSoup(..., "lxml")로 사용하는 파서
-python-multipart>=0.0.9  # main.py의 Form()/File() (음성 질문 업로드 엔드포인트)
-rank-bm25>=0.2.2         # hybrid_search.py의 BM25 스파스 인덱스
-langgraph>=0.2.0,<0.3    # corrective_rag_graph.py의 그래프 기반 파이프라인
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+lxml>=4.9.0
+python-multipart>=0.0.9
+rank-bm25>=0.2.2
+langgraph>=0.2.0,<0.3

@@ -7,7 +7,6 @@ output "be_target_group_arn" {
   value = aws_lb_target_group.be.arn
 }
 
-# CloudWatch 알람의 Dimensions에 필요한 축약 식별자 (observability 모듈에서 사용)
 output "arn_suffix" {
   value = aws_lb.this.arn_suffix
 }

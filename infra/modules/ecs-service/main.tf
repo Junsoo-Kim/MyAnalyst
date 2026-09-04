@@ -26,7 +26,6 @@ data "aws_iam_policy_document" "ecs_assume" {
   }
 }
 
-# --- 실행 역할: ECR pull, 로그 전송, (있다면) Secrets Manager 조회 ---
 resource "aws_iam_role" "execution" {
   name               = "${var.name_prefix}-${var.service_name}-exec"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
@@ -53,8 +52,6 @@ resource "aws_iam_role_policy" "secrets_access" {
   policy = data.aws_iam_policy_document.secrets_access[0].json
 }
 
-# --- 태스크 역할: 컨테이너 코드가 직접 쓰는 AWS 권한. 지금은 BE/RAG 둘 다 AWS API를
-# 직접 호출하지 않아 비워둔다 (S3 업로드 등이 필요해지면 이 role에 정책 추가). ---
 resource "aws_iam_role" "task" {
   name               = "${var.name_prefix}-${var.service_name}-task"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
@@ -145,15 +142,12 @@ resource "aws_ecs_service" "this" {
   }
 
   lifecycle {
-    # 오토스케일링(aws_appautoscaling_policy)이 바꾸는 값이라, terraform이 매번
-    # "desired_count가 다르다"고 diff를 내지 않도록 무시한다.
     ignore_changes = [desired_count]
   }
 
   tags = var.tags
 }
 
-# --- 수평 확장: 평균 CPU 사용률 타깃 트래킹 ---
 resource "aws_appautoscaling_target" "this" {
   max_capacity       = var.max_capacity
   min_capacity       = var.min_capacity

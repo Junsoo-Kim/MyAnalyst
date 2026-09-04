@@ -55,11 +55,9 @@ FE/node_modules/
 
 셀트리온 공시자료
 
-# Terraform
 **/.terraform/
 *.tfstate
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
 crash.log
-# .terraform.lock.hcl는 provider 버전 고정을 위해 커밋합니다 (gitignore 대상 아님)

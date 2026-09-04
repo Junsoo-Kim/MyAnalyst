@@ -14,9 +14,6 @@ locals {
   })
 }
 
-# =========================================================
-# VPC / IGW
-# =========================================================
 resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -30,9 +27,6 @@ resource "aws_internet_gateway" "this" {
   tags   = merge(local.common_tags, { Name = "${var.name_prefix}-igw" })
 }
 
-# =========================================================
-# 서브넷 - public(ALB) / private(BE, RAG, Milvus, RDS)
-# =========================================================
 resource "aws_subnet" "public" {
   count                   = length(var.public_subnet_cidrs)
   vpc_id                  = aws_vpc.this.id
@@ -58,9 +52,6 @@ resource "aws_subnet" "private" {
   })
 }
 
-# =========================================================
-# NAT Gateway - 프라이빗 서브넷의 아웃바운드(ECR pull, OpenAI API 호출 등)용
-# =========================================================
 resource "aws_eip" "nat" {
   count  = var.single_nat_gateway ? 1 : length(var.azs)
   domain = "vpc"
@@ -76,9 +67,6 @@ resource "aws_nat_gateway" "this" {
   depends_on = [aws_internet_gateway.this]
 }
 
-# =========================================================
-# 라우팅
-# =========================================================
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
   tags   = merge(local.common_tags, { Name = "${var.name_prefix}-public-rt" })

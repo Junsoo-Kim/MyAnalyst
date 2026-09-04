@@ -1,8 +1,4 @@
-# 서비스 계층별 최소 권한 보안그룹.
-# 트래픽 경로: 인터넷 -> ALB -> BE -> RAG -> Milvus / RDS
-# 각 SG는 "바로 앞 계층의 SG"에서만 인바운드를 허용합니다 (계층을 건너뛴 접근 차단).
 
-# --- ALB: 인터넷 -> ALB ---
 resource "aws_security_group" "alb" {
   name_prefix = "${var.name_prefix}-alb-"
   description = "Public ALB: 인터넷의 HTTP/HTTPS만 허용"
@@ -38,7 +34,6 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# --- BE(Spring Boot): ALB -> BE:8080 ---
 resource "aws_security_group" "be" {
   name_prefix = "${var.name_prefix}-be-"
   description = "BE(Spring Boot): ALB에서만 8080 인바운드 허용"
@@ -66,7 +61,6 @@ resource "aws_security_group" "be" {
   }
 }
 
-# --- RAG(FastAPI): BE -> RAG:8000 ---
 resource "aws_security_group" "rag" {
   name_prefix = "${var.name_prefix}-rag-"
   description = "RAG(FastAPI): BE에서만 8000 인바운드 허용"
@@ -94,7 +88,6 @@ resource "aws_security_group" "rag" {
   }
 }
 
-# --- Milvus(EC2): RAG -> Milvus:19530(gRPC)/9091(health), 선택적 관리자 SSH ---
 resource "aws_security_group" "milvus" {
   name_prefix = "${var.name_prefix}-milvus-"
   description = "Milvus: RAG에서만 19530/9091 인바운드 허용"
@@ -141,7 +134,6 @@ resource "aws_security_group" "milvus" {
   }
 }
 
-# --- RDS(PostgreSQL): BE -> RDS:5432 ---
 resource "aws_security_group" "rds" {
   name_prefix = "${var.name_prefix}-rds-"
   description = "RDS(PostgreSQL): BE에서만 5432 인바운드 허용"
@@ -169,9 +161,6 @@ resource "aws_security_group" "rds" {
   }
 }
 
-# --- ElastiCache(Redis): BE -> Redis:6379 ---
-# BE의 뉴스/주가 조회(ReportService.getNewsByCompany/getStockByCompany)가
-# @Cacheable로 실제 캐싱하도록 구현되어 있어, 이제 아래 SG를 쓰는 ElastiCache가 필요하다.
 resource "aws_security_group" "elasticache" {
   name_prefix = "${var.name_prefix}-elasticache-"
   description = "ElastiCache(Redis): BE에서만 6379 인바운드 허용"

@@ -1,27 +1,3 @@
-# corrective_rag_graph.py
-"""
-Corrective RAG(자기 검증형 RAG) 그래프.
-
-기존 rag_report_pipeline.py는 "키워드 생성 -> 임베딩 -> 검색 -> 생성"이 한 번만 실행되는
-완전 선형 구조라, 검색된 문서가 부실하거나 LLM이 컨텍스트를 벗어난 내용(환각)을 생성해도
-그걸 감지하고 스스로 고칠 방법이 없었다. 이 그래프는 그 뒤에 "검증 -> 재시도" 루프를 추가한다.
-
-    generate_keywords -> retrieve -> grade_documents -> generate_section -> grade_hallucination
-                              ^                                                    |
-                              |                    (근거 부족, 재시도 한도 안 남음)  |
-                              +------------------ rewrite_query <-------------------+
-                                                                                     |
-                                                                    (근거 충분 / 재시도 소진) -> END
-
-- grade_documents: 검색된 후보 문서들이 실제로 이 섹션 주제에 관련 있는지 LLM 한 번으로 일괄 채점해서
-  걸러낸다 (문서마다 LLM을 부르면 호출 수가 top_k배로 늘어나므로 배치 채점으로 비용을 억제).
-- grade_hallucination: 생성된 초안이 컨텍스트에 실제로 근거하는지 채점한다. 근거가 부족하면
-  그 이유(feedback)를 다음 단계로 넘긴다.
-- rewrite_query: grade_hallucination의 feedback을 바탕으로 검색 키워드를 다시 만들어 재검색한다 -
-  같은 키워드로 재시도해봐야 같은 문서가 다시 나올 뿐이므로, 재시도의 핵심은 "다른 걸 찾는 것".
-
-CORRECTIVE_RAG_ENABLED=false로 언제든 기존 선형 파이프라인으로 되돌릴 수 있다 (rag_report_pipeline.py 참고).
-"""
 import json
 from typing import Any, Dict, List, TypedDict
 
@@ -32,7 +8,6 @@ import config
 import hybrid_search
 import utils
 from prompts import build_base_prompt
-
 
 class SectionState(TypedDict):
     section_number: str
@@ -47,13 +22,10 @@ class SectionState(TypedDict):
     grounding_feedback: str
     retry_count: int
 
-
 def _grader_client() -> OpenAI:
-    return OpenAI(api_key=config.OPENAI_API_KEY)
-
+    return utils.get_openai_client()
 
 def _grade_documents_batch(section_title: str, keywords: str, docs: List[Dict[str, Any]]) -> List[bool]:
-    """검색된 문서 후보들의 관련성을 한 번의 LLM 호출로 일괄 채점한다."""
     if not docs:
         return []
 
@@ -86,9 +58,7 @@ def _grade_documents_batch(section_title: str, keywords: str, docs: List[Dict[st
 
     return [i in relevant for i in range(len(docs))]
 
-
 def _grade_hallucination(context: str, draft: str) -> Dict[str, Any]:
-    """생성된 초안이 컨텍스트에 근거하는지 채점한다."""
     prompt = f"""당신은 기업 분석 보고서의 사실 검증 담당자입니다.
 아래 [생성된 내용]이 [컨텍스트]에 실제로 근거하는지 판단하세요.
 컨텍스트에 없는 수치, 사실, 주장이 포함되어 있으면 근거가 없는 것입니다.
@@ -118,9 +88,7 @@ def _grade_hallucination(context: str, draft: str) -> Dict[str, Any]:
         print(f"[WARN] 환각 채점 실패, 근거 있음으로 간주합니다(fail-open): {e}")
         return {"grounded": True, "feedback": f"채점 실패: {e}"}
 
-
 def _rewrite_search_query(original_keywords: str, section_title: str, feedback: str) -> str:
-    """근거 부족 피드백을 바탕으로 재검색용 키워드를 다시 만든다."""
     prompt = f"""검색 키워드 "{original_keywords}"로 '{section_title}' 섹션을 작성했지만,
 다음 이유로 컨텍스트 근거가 부족하다고 판단되었습니다:
 {feedback}
@@ -136,9 +104,6 @@ def _rewrite_search_query(original_keywords: str, section_title: str, feedback: 
         print(f"[WARN] 쿼리 재작성 실패, 기존 키워드를 재사용합니다: {e}")
         return original_keywords
 
-
-# --- 노드 ---
-
 def node_generate_keywords(state: SectionState) -> Dict[str, Any]:
     params = state["report_params"]
     keywords = utils.generate_keywords_for_section(
@@ -146,7 +111,6 @@ def node_generate_keywords(state: SectionState) -> Dict[str, Any]:
         company=params.get("company", ""), date=params.get("date", ""),
     )
     return {"keywords": keywords}
-
 
 def node_retrieve(state: SectionState) -> Dict[str, Any]:
     embedding = utils.get_embedding(state["keywords"])
@@ -161,7 +125,6 @@ def node_retrieve(state: SectionState) -> Dict[str, Any]:
         top_k=config.SEARCH_TOP_K,
     )
     return {"retrieved_docs": docs}
-
 
 def node_grade_documents(state: SectionState) -> Dict[str, Any]:
     docs = state["retrieved_docs"]
@@ -184,7 +147,6 @@ def node_grade_documents(state: SectionState) -> Dict[str, Any]:
 
     return {"retrieved_docs": graded, "context": utils.format_context(graded)}
 
-
 def node_generate_section(state: SectionState) -> Dict[str, Any]:
     params = state["report_params"]
     dynamic_base_prompt = build_base_prompt(
@@ -206,16 +168,12 @@ def node_generate_section(state: SectionState) -> Dict[str, Any]:
     )
     return {"draft": content, "retry_count": state["retry_count"] + 1}
 
-
 def node_grade_hallucination(state: SectionState) -> Dict[str, Any]:
-    # 컨텍스트가 애초에 "자료 없음" 안내문 생성을 지시하는 폴백이었다면, 근거 판단 자체가
-    # 무의미하므로 통과시킨다 (안내문은 컨텍스트 부재를 스스로 인정하는 내용이라 환각이 아님).
     if state["context"].strip().startswith("<참고:"):
         return {"is_grounded": True, "grounding_feedback": ""}
 
     verdict = _grade_hallucination(state["context"], state["draft"])
     return {"is_grounded": verdict["grounded"], "grounding_feedback": verdict["feedback"]}
-
 
 def route_after_grading(state: SectionState) -> str:
     if state["is_grounded"]:
@@ -228,18 +186,14 @@ def route_after_grading(state: SectionState) -> str:
         return "end"
     return "retry"
 
-
 def node_rewrite_query(state: SectionState) -> Dict[str, Any]:
     new_keywords = _rewrite_search_query(state["keywords"], state["section_title"], state["grounding_feedback"])
     print(f"[Corrective RAG] Section {state['section_number']} 쿼리 재작성: '{state['keywords']}' -> '{new_keywords}'")
     return {"keywords": new_keywords}
 
-
 _compiled_graph = None
 
-
 def get_section_graph():
-    """그래프는 상태 없는(stateless) 순수 함수 조합이라 프로세스 전체에서 한 번만 컴파일해 재사용한다."""
     global _compiled_graph
     if _compiled_graph is not None:
         return _compiled_graph

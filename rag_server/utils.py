@@ -192,10 +192,9 @@ def search_milvus(query_vector: np.ndarray, collection_names_list: List[str], to
                             if query_result and len(query_result) > 0:
                                 direct_data = query_result[0]
                                 print(f"  Direct query result keys: {list(direct_data.keys())[:5]}")
-                                
-                                # 직접 쿼리에서 텍스트 필드 추출
-                                if text_field in direct_data:
-                                    entity_data[text_field] = direct_data[text_field]
+
+                                entity_data.update(direct_data)
+                                if text_field in entity_data and entity_data.get(text_field):
                                     print(f"  Text retrieved from direct query: {entity_data[text_field][:50]}...")
                                 else:
                                     print(f"  Warning: Text field '{text_field}' still not found after direct query")
@@ -291,6 +290,10 @@ def format_context(retrieved_chunks: List[Dict[str, Any]]) -> str:
         
     return context_str.strip()
 
+def get_openai_client() -> OpenAI:
+    return OpenAI(api_key=config.OPENAI_API_KEY, base_url=config.OPENAI_BASE_URL)
+
+
 # --- LLM Interaction Functions ---
 def ask_llm(query: str, context: str = "", base_prompt: str = prompts.BASE_PROMPT_TEXT, model: str = config.LLM_MODEL) -> str:
     """Sends a query and context to the LLM and returns the answer."""
@@ -325,7 +328,7 @@ def ask_llm(query: str, context: str = "", base_prompt: str = prompts.BASE_PROMP
     print(f"[DEBUG] 컨텍스트 길이: {len(context) if context else 0} 자")
     
     try:
-        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        client = get_openai_client()
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -453,7 +456,7 @@ def extract_domain_specific_terms(report_text: str) -> List[Dict[str, str]]:
         else:
             text_for_extraction = report_text
             
-        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        client = get_openai_client()
         response = client.chat.completions.create(
             model=config.LLM_MODEL,  # Use the same model as for report generation
             messages=[
@@ -540,7 +543,7 @@ def answer_question_about_report(question: str, report_content: str) -> str:
 """
     
     try:
-        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        client = get_openai_client()
         response = client.chat.completions.create(
             model=config.LLM_MODEL,
             messages=[
@@ -607,7 +610,7 @@ def transcribe_audio(audio_content: bytes) -> str:
         print(f"임시 오디오 파일 저장됨: {temp_audio_path} (크기: {len(audio_content)} 바이트)")
         
         try:
-            client = OpenAI(api_key=config.OPENAI_API_KEY)
+            client = get_openai_client()
             
             with open(temp_audio_path, "rb") as audio_file:
                 print("Whisper API 호출 중...")

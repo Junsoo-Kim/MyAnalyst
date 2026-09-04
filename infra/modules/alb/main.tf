@@ -17,13 +17,12 @@ resource "aws_lb" "this" {
   tags = merge(var.tags, { Name = "${var.name_prefix}-alb" })
 }
 
-# RAG는 ALB 뒤에 두지 않는다 (BE만 외부에 노출, RAG는 Service Connect로 BE에서만 접근).
 resource "aws_lb_target_group" "be" {
   name        = "${var.name_prefix}-be-tg"
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
-  target_type = "ip" # Fargate awsvpc 모드는 ip 타깃
+  target_type = "ip"
 
   health_check {
     path                = "/actuator/health"
@@ -37,10 +36,6 @@ resource "aws_lb_target_group" "be" {
   tags = merge(var.tags, { Name = "${var.name_prefix}-be-tg" })
 }
 
-# acm_certificate_arn이 없으면(기본값) HTTP:80만 열고 그대로 BE로 포워딩한다.
-# acm_certificate_arn을 주면 HTTP:80은 HTTPS:443으로 301 리다이렉트만 하고,
-# 실제 트래픽은 아래 aws_lb_listener.https가 받는다 - 도메인 없이 시작해도 코드가
-# 이미 완성돼 있어서, 나중에 도메인+ACM 인증서만 발급받아 var로 넘기면 바로 켜진다.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.this.arn
   port              = 80

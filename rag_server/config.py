@@ -9,6 +9,8 @@ load_dotenv()
 # API 키는 환경 변수에서 불러옵니다
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL") or None
+
 # LLM 모델 설정도 환경 변수에서 불러옵니다
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")  # 기본값 설정
 KEYWORD_LLM_MODEL = os.getenv("KEYWORD_LLM_MODEL", "gpt-4o-mini")
@@ -35,20 +37,13 @@ SEARCH_PARAMS = {
     # "params": {"ef": 64}
 }
 
-# --- Hybrid Search (Dense + BM25 Sparse + RRF) ---
-# Milvus 2.4 standalone은 자체 BM25/Sparse 인덱스가 없어서, Sparse 쪽은 hybrid_search.py에서
-# rank_bm25로 별도 구축한다. 문제가 생기면 false로 꺼서 기존 dense-only 검색으로 즉시 되돌릴 수 있다.
 HYBRID_SEARCH_ENABLED = os.getenv("HYBRID_SEARCH_ENABLED", "true").lower() == "true"
-BM25_TOP_K = int(os.getenv("BM25_TOP_K", str(SEARCH_TOP_K)))  # BM25 후보를 몇 개 뽑아 RRF에 넣을지
-RRF_K = int(os.getenv("RRF_K", "60"))  # RRF의 순위 완충 상수 (관례적으로 60 사용)
+BM25_TOP_K = int(os.getenv("BM25_TOP_K", str(SEARCH_TOP_K)))
+RRF_K = int(os.getenv("RRF_K", "60"))
 
-# --- Corrective RAG (LangGraph) ---
-# 섹션 생성을 "키워드 생성 -> 검색 -> 문서 관련성 채점 -> 생성 -> 근거(환각) 채점 -> (미달 시) 쿼리
-# 재작성 후 재검색" 그래프로 돌린다. false면 예전 선형 파이프라인(_generate_report_section_legacy)으로
-# 즉시 되돌아간다.
 CORRECTIVE_RAG_ENABLED = os.getenv("CORRECTIVE_RAG_ENABLED", "true").lower() == "true"
-GRADER_LLM_MODEL = os.getenv("GRADER_LLM_MODEL", "gpt-4o-mini")  # 문서 채점/환각 채점용 모델
-MAX_GROUNDING_RETRIES = int(os.getenv("MAX_GROUNDING_RETRIES", "2"))  # 근거 부족 시 재시도 최대 횟수
+GRADER_LLM_MODEL = os.getenv("GRADER_LLM_MODEL", "gpt-4o-mini")
+MAX_GROUNDING_RETRIES = int(os.getenv("MAX_GROUNDING_RETRIES", "2"))
 
 # --- Field Mappings per Collection ---
 # Define the name of the field containing the main text content for each collection

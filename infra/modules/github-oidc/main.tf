@@ -11,8 +11,6 @@ terraform {
   }
 }
 
-# GitHub Actions가 장기 보관되는 AWS 액세스키 없이(=repo secret에 AWS_SECRET_ACCESS_KEY를
-# 두지 않고) 이 역할을 임시로 assume해서 배포하게 한다 (OIDC 연동).
 data "tls_certificate" "github" {
   url = "https://token.actions.githubusercontent.com/.well-known/openid-configuration"
 }
@@ -40,7 +38,6 @@ data "aws_iam_policy_document" "assume" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # main 브랜치에서 실행된 워크플로우만 이 역할을 쓸 수 있다 (PR/포크에서는 불가).
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
@@ -59,7 +56,7 @@ data "aws_iam_policy_document" "deploy" {
   statement {
     sid       = "EcrAuth"
     actions   = ["ecr:GetAuthorizationToken"]
-    resources = ["*"] # 이 액션은 리소스 수준 제약을 지원하지 않음(AWS 사양)
+    resources = ["*"]
   }
 
   statement {
@@ -79,7 +76,7 @@ data "aws_iam_policy_document" "deploy" {
   statement {
     sid       = "EcsTaskDefinition"
     actions   = ["ecs:RegisterTaskDefinition", "ecs:DescribeTaskDefinition"]
-    resources = ["*"] # 두 액션 모두 AWS가 리소스 수준 제약을 지원하지 않음
+    resources = ["*"]
   }
 
   statement {

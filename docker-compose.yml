@@ -1,15 +1,6 @@
 name: myanalyst
 
-# 로컬에서 BE / RAG(FastAPI) / Milvus / PostgreSQL을 컨테이너로 통합 기동해
-# "3계층 디커플링" 아키텍처를 검증하기 위한 compose 파일입니다.
-# 필요한 비밀값은 .env (repo 루트, .env.example 참고)에서 읽습니다.
-#
-# 실행: docker compose up --build
-# FE(React)는 이 compose에 포함하지 않고 `cd FE && npm start`로 별도 실행합니다
-# (BE가 8080으로 열려 있으면 FE 코드의 http://localhost:8080 호출이 그대로 동작합니다).
-
 services:
-  # --- 벡터 DB (Milvus) 의존 스택 ---
   etcd:
     container_name: myanalyst-etcd
     image: quay.io/coreos/etcd:v3.5.5
@@ -66,7 +57,6 @@ services:
       - etcd
       - minio
 
-  # --- RDS(PostgreSQL)를 로컬에서 흉내내는 컨테이너 ---
   postgres:
     container_name: myanalyst-postgres
     image: postgres:16-alpine
@@ -84,19 +74,15 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- ElastiCache(Redis)를 로컬에서 흉내내는 컨테이너: 뉴스/주가 캐시 ---
   redis:
     container_name: myanalyst-redis
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # --- AI 연산 계층 (FastAPI + RAG 파이프라인) ---
   rag-server:
     container_name: myanalyst-rag-server
     build:
@@ -105,14 +91,16 @@ services:
       MILVUS_HOST: milvus
       MILVUS_PORT: 19530
       OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY를 .env에 설정하세요}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
     ports:
       - "8000:8000"
+    volumes:
+      - ./processing:/data/processing:ro
     depends_on:
       milvus:
         condition: service_healthy
 
-  # --- 백엔드 로직 계층 (Spring Boot) ---
   be:
     container_name: myanalyst-be
     build:

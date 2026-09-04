@@ -43,8 +43,6 @@ public class ReportService {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
-    // RAG(FastAPI) 서버 주소. 로컬은 localhost:8000, 컨테이너/클라우드에서는
-    // RAG_SERVER_BASE_URL 환경 변수로 서비스 디스커버리 이름을 주입합니다.
     @Value("${rag.server.base-url}")
     private String ragServerBaseUrl;
 
@@ -242,7 +240,6 @@ public class ReportService {
      * @param company 회사명
      * @return 뉴스 정보 목록
      */
-    // 같은 회사에 대한 반복 요청은 RAG 서버(->네이버 크롤링)를 다시 타지 않고 Redis 캐시에서 응답한다.
     @Cacheable(cacheNames = "news", key = "#company")
     @Transactional(readOnly = true)
     public List<NewsDto> getNewsByCompany(String company) {
@@ -265,7 +262,6 @@ public class ReportService {
      * @param company 회사명
      * @return 주식 정보
      */
-    // 주가는 뉴스보다 실시간성이 중요하므로 캐시 TTL을 짧게(1분) 잡아둔다 (RedisCacheConfig 참고).
     @Cacheable(cacheNames = "stocks", key = "#company")
     @Transactional(readOnly = true)
     public StockDto getStockByCompany(String company) {

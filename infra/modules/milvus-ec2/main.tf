@@ -18,12 +18,7 @@ data "aws_ami" "al2023" {
 }
 
 locals {
-  # cloud-init: Docker + Compose 플러그인 설치 후 Milvus 스택을 기동한다.
-  # NOTE: 실습/개인 프로젝트 수준의 부트스트랩이다. 운영 수준으로 가려면
-  # systemd 유닛으로 재부팅 시 자동 기동을 보장하고, CloudWatch 에이전트로
-  # 인스턴스 자체 지표(디스크 사용량 등)까지 관측성에 포함시켜야 한다.
   user_data = <<-EOF
-    #!/bin/bash
     set -eux
     dnf install -y docker
     systemctl enable --now docker

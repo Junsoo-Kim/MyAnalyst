@@ -23,10 +23,8 @@ resource "aws_db_instance" "this" {
   storage_type      = "gp3"
   storage_encrypted = true
 
-  db_name  = var.db_name
-  username = var.username
-  # 비밀번호를 직접 만들어 tfvars/state에 평문으로 남기지 않고, RDS가 Secrets Manager에
-  # 자동 생성/로테이션하도록 위임한다. BE는 배포 시 이 시크릿을 읽어 SPRING_DATASOURCE_PASSWORD로 주입.
+  db_name                     = var.db_name
+  username                    = var.username
   manage_master_user_password = true
 
   db_subnet_group_name   = aws_db_subnet_group.this.name
@@ -35,7 +33,7 @@ resource "aws_db_instance" "this" {
   multi_az                = var.multi_az
   publicly_accessible     = false
   deletion_protection     = false
-  skip_final_snapshot     = true # 데모/개인 프로젝트 기준 - 운영 전환 시 false + final_snapshot_identifier로 변경
+  skip_final_snapshot     = true
   backup_retention_period = 3
 
   tags = merge(var.tags, { Name = "${var.name_prefix}-postgres" })
