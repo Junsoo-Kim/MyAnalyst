@@ -10,3 +10,6 @@ protobuf>=3.20.0    # Often needed by pymilvus/grpcio
 grpcio<=1.67.1,>=1.49.1 # Specific version constraint from notebook
 ujson>=2.0.0        # Specific version constraint from notebook
 pandas>=1.2.4       # Specific version constraint from notebook
+prometheus-client>=0.19.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0

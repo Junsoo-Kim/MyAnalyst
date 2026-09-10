@@ -1,0 +1,34 @@
+name: RAG evaluation
+
+on:
+  pull_request:
+    paths:
+      - 'rag_server/**'
+  workflow_dispatch:
+
+jobs:
+  retrieval-metrics:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rag_server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install lightweight test dependencies
+        run: pip install fastapi pydantic requests beautifulsoup4 lxml prometheus-client starlette
+      - name: Verify metric implementation
+        run: python -m unittest discover -s evaluation/tests -v
+      - name: Verify crawling and observability units
+        run: python -m unittest discover -s tests -v
+      - name: Verify evaluator and quality-gate wiring
+        run: >-
+          python -m evaluation.evaluate_retrieval
+          --dataset evaluation/golden_dataset.example.jsonl
+          --fixture evaluation/fixtures/retrieval_results.json
+          --top-k 10
+          --min-recall-at-k 1.0
+          --min-mrr 1.0
+          --output /tmp/evaluation-report.json

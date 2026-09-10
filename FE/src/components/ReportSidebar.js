@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { apiFetch } from '../api/client';
 
 const ReportSidebar = ({
   isHeaderHidden,
@@ -48,7 +49,7 @@ const ReportSidebar = ({
   const fetchChatHistory = async (reportId) => {
     setIsChatHistoryLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/reports/${reportId}/chat`, {
+      const response = await apiFetch(`/reports/${reportId}/chat`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -165,7 +166,7 @@ const ReportSidebar = ({
       
       setChatMessages(prev => [...prev, tempUserMessage]);
       
-      const response = await fetch('http://localhost:8080/chat/stt', {
+      const response = await apiFetch('/chat/stt', {
         method: 'POST',
         credentials: 'include',
         body: formData
@@ -276,7 +277,7 @@ const ReportSidebar = ({
       setIsChatLoading(true);
       
       // API 호출
-      fetch('http://localhost:8080/chat', {
+      apiFetch('/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -464,7 +465,7 @@ const ReportSidebar = ({
     setIsChatLoading(true);
     
     try {
-      const response = await fetch('http://localhost:8080/chat', {
+      const response = await apiFetch('/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

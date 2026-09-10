@@ -23,7 +23,8 @@ public class User {
     @Column(name = "userid", length = 20)
     private String userid;
 
-    @Column(name = "password", nullable = false, length = 20)
+    // BCrypt hashes are 60 characters; leave room for future password encoders.
+    @Column(name = "password", nullable = false, length = 255)
     private String password;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)

@@ -14,6 +14,7 @@ import Signup from './pages/Signup';
 import ReportsList from './pages/ReportsList';
 import ReportView from './pages/ReportView';
 import CompanyAnalysis from './pages/CompanyAnalysis';
+import ReportJobView from './pages/ReportJobView';
 
 // Main CSS
 import './App.css';
@@ -50,6 +51,7 @@ function App() {
           <Route path="/reports-list" element={<ReportsList />} />
           <Route path="/report-view" element={<ReportView />} />
           <Route path="/company-analysis" element={<CompanyAnalysis />} />
+          <Route path="/report-job" element={<ReportJobView />} />
         </Routes>
       </main>
       <Footer />

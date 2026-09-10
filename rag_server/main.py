@@ -1,28 +1,60 @@
 # main.py
 from fastapi import FastAPI, HTTPException, status, Path, Body, File, UploadFile, Form
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, HttpUrl, Field
 from typing import Optional, List, Dict
 import time
 import urllib.parse
+import logging
+import uuid
 
 # Import modules in the correct order to avoid circular imports
+import observability  # No dependency on Milvus/torch, safe to import first
 import utils  # First import utils
 import crawling  # Then import crawling
 from crawling import NewsItemResponse  # Import specific classes
 import config  # Config import is fine
 import rag_report_pipeline  # Import RAG pipeline last since it depends on utils
 
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.responses import Response
+
 # --- FastAPI App Initialization ---
 app = FastAPI(title="RAG Corporate Analysis Report Generator")
+logger = logging.getLogger("myanalyst.rag")
+
+
+@app.middleware("http")
+async def trace_request(request, call_next):
+    """Preserve the API trace identifier across Spring → FastAPI calls."""
+    trace_id = request.headers.get("X-Trace-Id") or str(uuid.uuid4())
+    observability.set_trace_id(trace_id)
+    started_at = time.perf_counter()
+    response = await call_next(request)
+    response.headers["X-Trace-Id"] = trace_id
+    logger.info(
+        "rag_request trace_id=%s method=%s path=%s status=%s latency_ms=%.1f",
+        trace_id,
+        request.method,
+        request.url.path,
+        response.status_code,
+        (time.perf_counter() - started_at) * 1000,
+    )
+    return response
+
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(observability.registry), media_type=CONTENT_TYPE_LATEST)
 
 # --- Pydantic Models (for potential future request/response structure) ---
 class ReportRequest(BaseModel):
-    title: str  # 보고서 제목
-    company: str = "셀트리온"  # 분석하고자 하는 기업, 현재는 셀트리온으로 고정
-    date: str = "24년 4분기"  # 분석하고자 하는 시기, 현재는 24년 4분기로 고정
-    chapter: str  # 목차의 목록, \n\n으로 구분
-    indicator: str = "none"  # 보고서 생성 시 관심 지표, 현재는 none으로 고정
-    evaluations: str = ""  # 섹션별 평가 기준, \n\n으로 구분
+    title: str = Field(..., min_length=1, max_length=500)
+    company: str = Field(..., min_length=1, max_length=200)
+    date: str = Field(..., min_length=1, max_length=100)
+    chapter: str = Field(..., min_length=1)
+    indicator: str = Field(default="none", max_length=500)
+    evaluations: str = ""
 
 class ReportResponse(BaseModel):
     report: str
@@ -116,13 +148,14 @@ async def create_report(request: ReportRequest):
         utils.ensure_milvus_connection()
 
         # Call the main RAG pipeline function with request parameters
-        generated_report = rag_report_pipeline.generate_full_report(
-            title=request.title,
-            company=request.company,
-            date=request.date,
-            chapter=request.chapter,
-            indicator=request.indicator,
-            evaluations=request.evaluations
+        generated_report = await run_in_threadpool(
+            rag_report_pipeline.generate_full_report,
+            request.title,
+            request.company,
+            request.date,
+            request.chapter,
+            request.indicator,
+            request.evaluations,
         )
 
         # Extract domain-specific terms from the generated report

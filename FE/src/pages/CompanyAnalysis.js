@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { apiFetch } from '../api/client';
 import './CompanyAnalysis.css'; // 별도의 CSS 파일 필요
 
 const CompanyAnalysis = () => {
@@ -318,10 +319,11 @@ const CompanyAnalysis = () => {
       console.log('보고서 생성 요청 데이터:', requestData);
       
       // API 호출
-      const response = await fetch('http://localhost:8080/reports', {
+      const response = await apiFetch('/report-jobs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Idempotency-Key': window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
         },
         body: JSON.stringify(requestData),
         credentials: 'include' // 쿠키 포함
@@ -334,7 +336,8 @@ const CompanyAnalysis = () => {
 
       // 성공 시 보고서 목록 페이지로 이동
       alert('보고서가 성공적으로 생성되었습니다.');
-      navigate('/reports-list');
+      const job = await response.json();
+      navigate(`/report-job?id=${job.jobId}`);
       
     } catch (err) {
       console.error('보고서 생성 오류:', err);

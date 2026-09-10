@@ -1,0 +1,10 @@
+{
+  "exact-financial-metric": [
+    {"collection": "celltrion_embeddings", "id": "REPLACE_WITH_MILVUS_ID"},
+    {"collection": "news_embeddings", "id": "other"}
+  ],
+  "product-name": [
+    {"collection": "news_embeddings", "id": "REPLACE_WITH_MILVUS_ID"}
+  ],
+  "unanswerable": []
+}

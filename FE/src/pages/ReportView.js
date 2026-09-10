@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { marked } from 'marked';
+import { apiFetch, apiUrl } from '../api/client';
 import ReportSidebar from '../components/ReportSidebar';
+import { sanitizeReportHtml } from '../utils/sanitizeReportHtml';
 import './ReportView.css';
 
 const ReportView = () => {
@@ -72,7 +74,7 @@ const ReportView = () => {
         setIsLoading(true);
         setError(null);
 
-        const response = await fetch(`http://localhost:8080/reports/${reportId}`, {
+        const response = await apiFetch(`/reports/${reportId}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json'
@@ -128,7 +130,7 @@ const ReportView = () => {
   const fetchNewsForCompany = async (companyName) => {
     try {
       setIsNewsLoading(true);
-      const response = await fetch(`http://localhost:8080/news/${companyName}`, {
+      const response = await apiFetch(`/news/${companyName}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -154,7 +156,7 @@ const ReportView = () => {
   const fetchStockInfo = async (companyName) => {
     try {
       setIsStockLoading(true);
-      const response = await fetch(`http://localhost:8080/stocks/${companyName}`, {
+      const response = await apiFetch(`/stocks/${companyName}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -171,7 +173,7 @@ const ReportView = () => {
       setStockInfo(stockData);
       
       // 차트 이미지 URL 설정
-      setStockChartUrl(`http://localhost:8080/stocks/${companyName}/chart-image`);
+      setStockChartUrl(apiUrl(`/stocks/${companyName}/chart-image`));
     } catch (err) {
       console.error('주식 정보 불러오기 오류:', err);
     } finally {
@@ -183,7 +185,7 @@ const ReportView = () => {
   const fetchDictionary = async (reportId) => {
     try {
       setIsDictionaryLoading(true);
-      const response = await fetch(`http://localhost:8080/reports/${reportId}/dictionary`, {
+      const response = await apiFetch(`/reports/${reportId}/dictionary`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -524,7 +526,7 @@ const ReportView = () => {
                 id="markdownContent" 
                 className="markdown-content"
                 dangerouslySetInnerHTML={{ 
-                  __html: highlightTermsInContent(marked.parse(report.content))
+                  __html: sanitizeReportHtml(highlightTermsInContent(marked.parse(report.content)))
                 }}
               />
             </>

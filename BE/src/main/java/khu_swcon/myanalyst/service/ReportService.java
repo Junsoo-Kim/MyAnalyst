@@ -30,6 +30,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,27 +44,32 @@ public class ReportService {
     private final ObjectMapper objectMapper;
     
     @Autowired
-    public ReportService(ReportRepository reportRepository, 
-                        UserRepository userRepository, 
-                        DictionaryRepository dictionaryRepository) {
+    public ReportService(ReportRepository reportRepository,
+                        UserRepository userRepository,
+                        DictionaryRepository dictionaryRepository,
+                        WebClient ragWebClient,
+                        ObjectMapper objectMapper) {
         this.reportRepository = reportRepository;
         this.userRepository = userRepository;
         this.dictionaryRepository = dictionaryRepository;
-        this.webClient = WebClient.create();
-        this.objectMapper = new ObjectMapper();
+        this.webClient = ragWebClient;
+        this.objectMapper = objectMapper;
     }
     
     @Transactional
     public Report createReport(ReportDto reportDto) {
+        return createReport(reportDto, null);
+    }
+
+    @Transactional
+    public Report createReport(ReportDto reportDto, UUID generationJobId) {
         // 1. 사용자 ID 검증
         User user = userRepository.findByUserid(reportDto.getUserid())
                 .orElseThrow(() -> new UserNotFoundException("사용자 ID가 존재하지 않습니다: " + reportDto.getUserid()));
         
         // company와 date에 기본값 설정
-        String company = reportDto.getCompany() != null && !reportDto.getCompany().isEmpty() ? 
-                         reportDto.getCompany() : "셀트리온";
-        String date = reportDto.getDate() != null && !reportDto.getDate().isEmpty() ? 
-                      reportDto.getDate() : "24년 4분기";
+        String company = requiredText(reportDto.getCompany(), "company");
+        String date = requiredText(reportDto.getDate(), "date");
         
         // 2. Report 객체 생성 (company와 date 추가)
         Report report = Report.builder()
@@ -73,6 +80,7 @@ public class ReportService {
                 .indicator(reportDto.getIndicator())
                 .company(company)
                 .date(date)
+                .generationJobId(generationJobId)
                 .build();
         
         // 3. 외부 API 호출하여 리포트 내용 생성 및 도메인 용어 저장
@@ -96,6 +104,11 @@ public class ReportService {
         
         return savedReport;
     }
+
+    @Transactional(readOnly = true)
+    public Optional<Report> findGeneratedReport(UUID generationJobId) {
+        return reportRepository.findByGenerationJobId(generationJobId);
+    }
     
     /**
      * 외부 API를 호출하여 리포트 내용과 도메인 용어를 생성
@@ -115,13 +128,12 @@ public class ReportService {
         requestBody.put("chapter", report.getChapter());
         requestBody.put("indicator", report.getIndicator());
         
-        // localhost:8000에서 'evaluation'으로 필드명을 기대하고 있다면 아래와 같이 변경
-        requestBody.put("evaluation", evaluations);  // 'evaluations' 대신 'evaluation'으로 변경
+        requestBody.put("evaluations", evaluations == null ? "" : evaluations);
         
         // API 호출 및 응답 처리
         try {
             Map<String, Object> response = webClient.post()
-                    .uri("http://localhost:8000/reports")
+                    .uri("/reports")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
@@ -174,8 +186,10 @@ public class ReportService {
     }
     
     @Transactional(readOnly = true)
-    public List<ReportListDto> getAllReports() {
-        List<Report> reports = reportRepository.findAll();
+    public List<ReportListDto> getAllReports(String userId) {
+        User user = userRepository.findByUserid(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
+        List<Report> reports = reportRepository.findByUser(user);
         
         // Convert Report entities to ReportListDto objects
         return reports.stream()
@@ -187,9 +201,10 @@ public class ReportService {
     }
     
     @Transactional(readOnly = true)
-    public ReportDetailDto getReportById(Integer reportId) {
+    public ReportDetailDto getReportById(Integer reportId, String userId) {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ApiException("Report not found with ID: " + reportId, HttpStatus.NOT_FOUND));
+        assertOwner(report, userId);
         
         return ReportDetailDto.builder()
                 .title(report.getTitle())
@@ -202,10 +217,11 @@ public class ReportService {
     }
     
     @Transactional
-    public void deleteReport(Integer reportId) {
+    public void deleteReport(Integer reportId, String userId) {
         // Check if report exists
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ApiException("Report not found with ID: " + reportId, HttpStatus.NOT_FOUND));
+        assertOwner(report, userId);
         
         // Delete the report
         reportRepository.delete(report);
@@ -228,6 +244,19 @@ public class ReportService {
                         .build())
                 .collect(Collectors.toList());
     }
+
+    private void assertOwner(Report report, String userId) {
+        if (!report.getUser().getUserid().equals(userId)) {
+            throw new ApiException("You do not have access to this report", HttpStatus.FORBIDDEN);
+        }
+    }
+
+    private String requiredText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new ApiException(fieldName + " is required", HttpStatus.BAD_REQUEST);
+        }
+        return value.trim();
+    }
     
     /**
      * 회사명으로 뉴스 정보를 조회
@@ -240,7 +269,7 @@ public class ReportService {
         try {
             // API 호출 및 응답 처리
             return webClient.get()
-                    .uri("http://localhost:8000/news/{company}", company)
+                    .uri("/news/{company}", company)
                     .retrieve()
                     .bodyToFlux(NewsDto.class)
                     .collectList()
@@ -261,7 +290,7 @@ public class ReportService {
         try {
             // API 호출 및 응답 처리
             return webClient.get()
-                    .uri("http://localhost:8000/stocks/{company}", company)
+                    .uri("/stocks/{company}", company)
                     .retrieve()
                     .bodyToMono(StockDto.class)
                     .block(); // 동기적으로 응답 대기
@@ -280,7 +309,7 @@ public class ReportService {
         try {
             // API 호출 및 응답 처리
             byte[] imageBytes = webClient.get()
-                    .uri("http://localhost:8000/stocks/{company}/chart-image", company)
+                    .uri("/stocks/{company}/chart-image", company)
                     .accept(MediaType.IMAGE_PNG, MediaType.IMAGE_JPEG, MediaType.APPLICATION_OCTET_STREAM)
                     .retrieve()
                     .bodyToMono(byte[].class)

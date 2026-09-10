@@ -22,6 +22,37 @@ def clean_price_data(text):
         return None
     return text.replace(",", "").strip()
 
+_NAVER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+    "Referer": "https://finance.naver.com/",
+}
+
+
+def resolve_stock_code(company_name_query: str) -> str:
+    search_url = "https://ac.stock.naver.com/ac"
+    try:
+        response = requests.get(
+            search_url,
+            params={"q": company_name_query, "target": "stock"},
+            headers=_NAVER_HEADERS,
+            timeout=10,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=503, detail=f"네이버 증권 서버에서 종목 검색에 실패했습니다: {str(e)}")
+
+    items = response.json().get("items", [])
+    if not items:
+        raise HTTPException(status_code=404, detail=f"'{company_name_query}'에 해당하는 종목을 네이버 증권에서 찾을 수 없습니다.")
+
+    exact_match = next((item for item in items if item.get("name") == company_name_query), None)
+    match = exact_match or items[0]
+    stock_code = match.get("code")
+    if not stock_code:
+        raise HTTPException(status_code=404, detail="검색된 종목에서 종목 코드를 추출할 수 없습니다.")
+
+    return stock_code
+
 class NewsItem(BaseModel):
     rank: int # 순위
     title: str # 제목
@@ -221,44 +252,17 @@ def crawl_naver_news_for_company(company_name: str, limit: int = 10) -> List[New
 
 
 def get_stock_data_with_search(company_name_query: str) -> Optional[StockInfo]:
-    # 1단계: 회사명으로 종목 코드 검색. 현재 오류 나서 주석 처리. 추후 수정 필요.
-#     search_url = f"https://finance.naver.com/search/searchList.naver?query={urllib.parse.quote(company_name_query)}"
-#     try:
-#         search_response = requests.get(search_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-# , "Referer": "https://finance.naver.com/"}, timeout=10)
-#         search_response.raise_for_status()
-#     except requests.exceptions.RequestException as e:
-#         print(f"종목 검색 실패 ({company_name_query}): {e}")
-#         raise HTTPException(status_code=503, detail=f"네이버 증권 서버에서 종목 검색에 실패했습니다: {str(e)}")
+    stock_code = resolve_stock_code(company_name_query)
 
-#     search_soup = BeautifulSoup(search_response.text, "lxml")
-#     first_result_link_tag = search_soup.select_one("div.section_search td.tit > a") # 일반 국내 주식
-#     if not first_result_link_tag:
-#         first_result_link_tag = search_soup.select_one("dl.lst_results dt.tit_stock > a") # 다른 타입 (해외 등)
-
-#     if not first_result_link_tag or not first_result_link_tag.get("href"):
-#         raise HTTPException(status_code=404, detail=f"'{company_name_query}'에 해당하는 종목을 네이버 증권에서 찾을 수 없습니다.")
-
-#     item_page_url_suffix = first_result_link_tag["href"]
-#     stock_code_match = re.search(r"code=(\w+)", item_page_url_suffix)
-#     if not stock_code_match:
-#         raise HTTPException(status_code=404, detail="검색된 종목에서 종목 코드를 추출할 수 없습니다.")
-    
-#     stock_code = stock_code_match.group(1)
-
-    # 임시로 종목 코드를 셀트리온 종목코드로 고정정
-    stock_code = '068270'
-    
     item_main_url = f"https://finance.naver.com/item/main.naver?code={stock_code}"
     try:
-        item_response = requests.get(item_main_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-, "Referer": "https://finance.naver.com/"}, timeout=10)
+        item_response = requests.get(item_main_url, headers=_NAVER_HEADERS, timeout=10)
         item_response.raise_for_status()
         html_content_to_parse = item_response.text
     except requests.exceptions.RequestException as e:
         print(f"종목 상세 정보 페이지 로드 실패 ({stock_code}): {e}")
         raise HTTPException(status_code=503, detail=f"네이버 증권 서버에서 {stock_code}의 상세 정보 로드에 실패했습니다: {str(e)}")
-    
+
     return crawl_naver_finance_from_html(html_content_to_parse, stock_code, company_name_query, item_main_url)
 
 def crawl_naver_finance_from_html(html_content: str, stock_code_from_url: str, company_name_from_search: str, item_main_url: str = None) -> StockInfo:
@@ -478,38 +482,12 @@ def crawl_naver_finance_from_html(html_content: str, stock_code_from_url: str, c
     return info
 
 async def get_chart_image_data(company_name_query: str) -> StreamingResponse:
-#     # 1. 회사명으로 종목 코드 검색
-#     search_url = f"https://finance.naver.com/search/searchList.naver?query={urllib.parse.quote(company_name_query)}"
-#     try:
-#         search_response = requests.get(search_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-# , "Referer": "https://finance.naver.com/"}, timeout=10)
-#         search_response.raise_for_status()
-#         search_soup = BeautifulSoup(search_response.text, "lxml")
-        
-#         first_result_link_tag = search_soup.select_one("div.section_search td.tit > a")
-#         if not first_result_link_tag: # 다른 검색 결과 구조 시도
-#             first_result_link_tag = search_soup.select_one("dl.lst_results dt.tit_stock > a")
+    stock_code = resolve_stock_code(company_name_query)
 
-#         if not first_result_link_tag or not first_result_link_tag.get("href"):
-#             raise HTTPException(status_code=404, detail=f"'{company_name_query}'에 해당하는 종목을 찾을 수 없습니다.")
-        
-#         item_page_url_suffix = first_result_link_tag["href"]
-#         stock_code_match = re.search(r"code=(\w+)", item_page_url_suffix)
-#         if not stock_code_match:
-#             raise HTTPException(status_code=404, detail="검색된 종목에서 종목 코드를 추출할 수 없습니다.")
-#         stock_code = stock_code_match.group(1)
-
-#     except requests.exceptions.RequestException as e:
-#         raise HTTPException(status_code=503, detail=f"종목 검색 중 오류: {str(e)}")
-
-    # 임시로 셀트리온 종목 코드로 고정정
-    stock_code = '068270'
-
-    # 2. 종목 상세 페이지 HTML 가져오기
+    # 종목 상세 페이지 HTML 가져오기
     item_main_url = f"https://finance.naver.com/item/main.naver?code={stock_code}"
     try:
-        item_response = requests.get(item_main_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-, "Referer": "https://finance.naver.com/"}, timeout=10)
+        item_response = requests.get(item_main_url, headers=_NAVER_HEADERS, timeout=10)
         item_response.raise_for_status()
         item_soup = BeautifulSoup(item_response.text, "lxml")
     except requests.exceptions.RequestException as e:
@@ -519,14 +497,12 @@ async def get_chart_image_data(company_name_query: str) -> StreamingResponse:
     chart_img_tag = item_soup.select_one("img#img_chart_area")
     if not chart_img_tag or not chart_img_tag.get("src"):
         raise HTTPException(status_code=404, detail="차트 이미지 정보를 찾을 수 없습니다.")
-    
+
     chart_image_url = chart_img_tag["src"]
-    
+
     # 4. 이미지 데이터 가져오기
     try:
-        # 이미지 요청 시에도 Referer를 포함한 헤더 사용
-        image_response = requests.get(chart_image_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-, "Referer": "https://finance.naver.com/"}, stream=True, timeout=10)
+        image_response = requests.get(chart_image_url, headers=_NAVER_HEADERS, stream=True, timeout=10)
         image_response.raise_for_status()
         
         # 이미지 내용을 메모리에 로드

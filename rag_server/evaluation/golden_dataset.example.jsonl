@@ -1,0 +1,3 @@
+{"id":"exact-financial-metric","query":"기업의 영업이익과 매출 변동 원인은 무엇인가?","relevant_document_ids":["celltrion_embeddings:REPLACE_WITH_MILVUS_ID"],"required_facts":["매출 또는 영업이익 수치","변동 원인"],"answerable":true,"category":"exact-number"}
+{"id":"product-name","query":"주요 바이오시밀러 제품의 최근 판매 동향은?","relevant_document_ids":["news_embeddings:REPLACE_WITH_MILVUS_ID"],"required_facts":["제품명","판매 동향"],"answerable":true,"category":"product-name"}
+{"id":"unanswerable","query":"검색 문서에 없는 미래 주가를 예측해줘.","relevant_document_ids":[],"required_facts":[],"answerable":false,"category":"unanswerable"}

@@ -33,10 +33,13 @@ public class DictionaryService {
      * @return 도메인 특화 용어 목록
      */
     @Transactional(readOnly = true)
-    public List<DomainSpecificTermDto> getDictionaryByReportId(Integer reportId) {
+    public List<DomainSpecificTermDto> getDictionaryByReportId(Integer reportId, String userId) {
         // 리포트 존재 여부 확인
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ApiException("Report not found with ID: " + reportId, HttpStatus.NOT_FOUND));
+        if (!report.getUser().getUserid().equals(userId)) {
+            throw new ApiException("You do not have access to this report", HttpStatus.FORBIDDEN);
+        }
         
         // 해당 리포트의 사전 용어 조회
         List<Dictionary> dictionaries = dictionaryRepository.findByReport(report);

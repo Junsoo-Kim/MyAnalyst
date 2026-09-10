@@ -34,10 +34,10 @@ public class ChatService {
     private final WebClient webClient;
     
     @Autowired
-    public ChatService(ChatRepository chatRepository, ReportRepository reportRepository) {
+    public ChatService(ChatRepository chatRepository, ReportRepository reportRepository, WebClient ragWebClient) {
         this.chatRepository = chatRepository;
         this.reportRepository = reportRepository;
-        this.webClient = WebClient.create();
+        this.webClient = ragWebClient;
     }
     
     /**
@@ -47,10 +47,11 @@ public class ChatService {
      * @return 생성된 답변
      */
     @Transactional
-    public ChatResponseDto processChat(ChatRequestDto chatRequestDto) {
+    public ChatResponseDto processChat(ChatRequestDto chatRequestDto, String userId) {
         // 1. 리포트 존재 여부 확인
         Report report = reportRepository.findById(chatRequestDto.getReportid())
                 .orElseThrow(() -> new ApiException("Report not found with ID: " + chatRequestDto.getReportid(), HttpStatus.NOT_FOUND));
+        assertOwner(report, userId);
         
         // 2. 외부 API 호출하여 답변 생성
         Map<String, String> requestBody = new HashMap<>();
@@ -59,7 +60,7 @@ public class ChatService {
         
         try {
             Map<String, Object> response = webClient.post()
-                    .uri("http://localhost:8000/questions")
+                    .uri("/questions")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
@@ -100,10 +101,11 @@ public class ChatService {
      * @return 채팅 기록 목록
      */
     @Transactional(readOnly = true)
-    public List<ChatHistoryDto> getChatHistoryByReportId(Integer reportId) {
+    public List<ChatHistoryDto> getChatHistoryByReportId(Integer reportId, String userId) {
         // 1. 리포트 존재 여부 확인
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ApiException("Report not found with ID: " + reportId, HttpStatus.NOT_FOUND));
+        assertOwner(report, userId);
         
         // 2. 채팅 기록 조회
         List<Chat> chats = chatRepository.findByReport(report);
@@ -125,10 +127,11 @@ public class ChatService {
      * @return 생성된 질문과 답변
      */
     @Transactional
-    public ChatSttResponseDto processSttChat(ChatSttRequestDto chatSttRequestDto) {
+    public ChatSttResponseDto processSttChat(ChatSttRequestDto chatSttRequestDto, String userId) {
         // 1. 리포트 존재 여부 확인
         Report report = reportRepository.findById(chatSttRequestDto.getReportid())
                 .orElseThrow(() -> new ApiException("Report not found with ID: " + chatSttRequestDto.getReportid(), HttpStatus.NOT_FOUND));
+        assertOwner(report, userId);
         
         try {
             // 2. 외부 API 호출을 위한 멀티파트 요청 구성
@@ -162,7 +165,7 @@ public class ChatService {
             
             // 3. 외부 API 호출
             Map<String, Object> response = webClient.post()
-                    .uri("http://localhost:8000/questions/stt")
+                    .uri("/questions/stt")
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .body(BodyInserters.fromMultipartData(builder.build()))
                     .retrieve()
@@ -196,6 +199,12 @@ public class ChatService {
         } catch (Exception e) {
             e.printStackTrace(); // 스택 트레이스 출력
             throw new ApiException("STT 답변 생성 중 오류 발생: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private void assertOwner(Report report, String userId) {
+        if (!report.getUser().getUserid().equals(userId)) {
+            throw new ApiException("You do not have access to this report", HttpStatus.FORBIDDEN);
         }
     }
 }

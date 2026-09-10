@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.core.io.ByteArrayResource;
+import jakarta.servlet.http.HttpSession;
 
 import java.util.List;
 
@@ -37,12 +38,15 @@ public class ReportController {
     }
     
     @PostMapping("/reports")
-    public ResponseEntity<?> createReport(@RequestBody ReportDto reportDto) {
+    public ResponseEntity<?> createReport(@RequestBody ReportDto reportDto, HttpSession session) {
         try {
+            reportDto.setUserid(currentUser(session));
             reportService.createReport(reportDto);
             return new ResponseEntity<>("", HttpStatus.OK);
         } catch (UserNotFoundException e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND);
+        } catch (ApiException e) {
+            return new ResponseEntity<>(e.getMessage(), e.getStatus());
         } catch (Exception e) {
             return new ResponseEntity<>("Report 생성 중 오류가 발생했습니다: " + e.getMessage(), 
                     HttpStatus.INTERNAL_SERVER_ERROR);
@@ -50,9 +54,9 @@ public class ReportController {
     }
     
     @GetMapping("/reports")
-    public ResponseEntity<?> getAllReports() {
+    public ResponseEntity<?> getAllReports(HttpSession session) {
         try {
-            List<ReportListDto> reports = reportService.getAllReports();
+            List<ReportListDto> reports = reportService.getAllReports(currentUser(session));
             return new ResponseEntity<>(reports, HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>("Report 목록 조회 중 오류가 발생했습니다: " + e.getMessage(), 
@@ -61,9 +65,9 @@ public class ReportController {
     }
     
     @GetMapping("/reports/{reportId}")
-    public ResponseEntity<?> getReportById(@PathVariable Integer reportId) {
+    public ResponseEntity<?> getReportById(@PathVariable Integer reportId, HttpSession session) {
         try {
-            ReportDetailDto reportDetail = reportService.getReportById(reportId);
+            ReportDetailDto reportDetail = reportService.getReportById(reportId, currentUser(session));
             return new ResponseEntity<>(reportDetail, HttpStatus.OK);
         } catch (ApiException e) {
             return new ResponseEntity<>(e.getMessage(), e.getStatus());
@@ -74,8 +78,11 @@ public class ReportController {
     }
     
     @GetMapping("/reports/user/{userId}")
-    public ResponseEntity<?> getReportsByUserId(@PathVariable String userId) {
+    public ResponseEntity<?> getReportsByUserId(@PathVariable String userId, HttpSession session) {
         try {
+            if (!currentUser(session).equals(userId)) {
+                return new ResponseEntity<>("You do not have access to these reports", HttpStatus.FORBIDDEN);
+            }
             List<ReportListDto> reports = reportService.getReportsByUserId(userId);
             return new ResponseEntity<>(reports, HttpStatus.OK);
         } catch (UserNotFoundException e) {
@@ -87,9 +94,9 @@ public class ReportController {
     }
     
     @DeleteMapping("/reports/{reportId}")
-    public ResponseEntity<?> deleteReport(@PathVariable Integer reportId) {
+    public ResponseEntity<?> deleteReport(@PathVariable Integer reportId, HttpSession session) {
         try {
-            reportService.deleteReport(reportId);
+            reportService.deleteReport(reportId, currentUser(session));
             return new ResponseEntity<>(HttpStatus.OK);
         } catch (ApiException e) {
             return new ResponseEntity<>(e.getMessage(), e.getStatus());
@@ -162,9 +169,9 @@ public class ReportController {
      * @return 도메인 특화 용어 목록
      */
     @GetMapping("/reports/{reportId}/dictionary")
-    public ResponseEntity<?> getDictionaryByReportId(@PathVariable Integer reportId) {
+    public ResponseEntity<?> getDictionaryByReportId(@PathVariable Integer reportId, HttpSession session) {
         try {
-            List<DomainSpecificTermDto> terms = dictionaryService.getDictionaryByReportId(reportId);
+            List<DomainSpecificTermDto> terms = dictionaryService.getDictionaryByReportId(reportId, currentUser(session));
             return new ResponseEntity<>(terms, HttpStatus.OK);
         } catch (ApiException e) {
             return new ResponseEntity<>(e.getMessage(), e.getStatus());
@@ -181,9 +188,9 @@ public class ReportController {
      * @return 채팅 기록 목록
      */
     @GetMapping("/reports/{reportId}/chat")
-    public ResponseEntity<?> getChatHistoryByReportId(@PathVariable Integer reportId) {
+    public ResponseEntity<?> getChatHistoryByReportId(@PathVariable Integer reportId, HttpSession session) {
         try {
-            List<ChatHistoryDto> chats = chatService.getChatHistoryByReportId(reportId);
+            List<ChatHistoryDto> chats = chatService.getChatHistoryByReportId(reportId, currentUser(session));
             return new ResponseEntity<>(chats, HttpStatus.OK);
         } catch (ApiException e) {
             return new ResponseEntity<>(e.getMessage(), e.getStatus());
@@ -191,5 +198,9 @@ public class ReportController {
             return new ResponseEntity<>("채팅 기록 조회 중 오류가 발생했습니다: " + e.getMessage(),
                     HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private String currentUser(HttpSession session) {
+        return (String) session.getAttribute("userId");
     }
 }

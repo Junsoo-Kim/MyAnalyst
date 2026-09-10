@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { apiFetch } from '../api/client';
 
 const Header = () => {
   const location = useLocation();
@@ -45,7 +46,12 @@ const Header = () => {
     document.querySelector('.mobile-nav-toggle').classList.toggle('bi-x');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await apiFetch('/sessions', { method: 'DELETE' });
+    } catch (error) {
+      console.error('Logout request failed:', error);
+    }
     // Delete the userid cookie
     document.cookie = "userId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     // Update login status

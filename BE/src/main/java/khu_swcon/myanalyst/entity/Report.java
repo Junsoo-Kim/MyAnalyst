@@ -9,6 +9,7 @@ import lombok.AllArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "Reports") // 실제 테이블명 Reports에 매핑
@@ -45,6 +46,9 @@ public class Report {
 
     @Column(name = "date", columnDefinition = "TEXT")
     private String date;
+
+    @Column(name = "generation_job_id", unique = true)
+    private UUID generationJobId;
 
     @OneToMany(mappedBy = "report")
     private List<Dictionary> dictionaryEntries = new ArrayList<>();

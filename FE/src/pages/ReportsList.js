@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { apiFetch } from '../api/client';
 import './ReportsList.css'; // CSS 파일 추가 필요
 
 const ReportsList = () => {
@@ -43,7 +44,7 @@ const ReportsList = () => {
       
       try {
         setIsLoading(true);
-        const response = await fetch(`http://localhost:8080/reports/user/${userId}`, {
+        const response = await apiFetch(`/reports/user/${userId}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { apiFetch } from '../api/client';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -32,7 +33,7 @@ const Signup = () => {
     try {
       setIsLoading(true);
       
-      const response = await fetch('http://localhost:8080/users', {
+      const response = await apiFetch('/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

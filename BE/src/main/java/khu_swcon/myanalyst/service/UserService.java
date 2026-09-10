@@ -8,15 +8,18 @@ import khu_swcon.myanalyst.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Service
 public class UserService {
     
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
     
     @Autowired
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
     
     @Transactional
@@ -29,21 +32,25 @@ public class UserService {
         // Create new user
         User user = User.builder()
                 .userid(userDto.getUserid())
-                .password(userDto.getPassword())
+                .password(passwordEncoder.encode(userDto.getPassword()))
                 .build();
         
         // Save user to database
         return userRepository.save(user);
     }
     
-    @Transactional(readOnly = true)
+    @Transactional
     public void login(UserDto userDto) {
         // 1. 사용자 ID 검증
         User user = userRepository.findByUserid(userDto.getUserid())
                 .orElseThrow(() -> new UserNotFoundException("사용자 ID가 존재하지 않습니다: " + userDto.getUserid()));
         
         // 2. 비밀번호 검증
-        if (!user.getPassword().equals(userDto.getPassword())) {
+        if (!passwordEncoder.matches(userDto.getPassword(), user.getPassword())) {
+            if (user.getPassword().equals(userDto.getPassword())) {
+                user.setPassword(passwordEncoder.encode(userDto.getPassword()));
+                return;
+            }
             throw new InvalidPasswordException("비밀번호가 일치하지 않습니다");
         }
         
