@@ -54,3 +54,10 @@ naver_news_response.html
 FE/node_modules/
 
 셀트리온 공시자료
+
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log

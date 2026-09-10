@@ -1,0 +1,75 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "BE/**"
+      - "rag_server/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+  NAME_PREFIX: myanalyst-prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: be
+            context: ./BE
+            container: be
+          - name: rag-server
+            context: ./rag_server
+            container: rag-server
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPOSITORY: ${{ env.NAME_PREFIX }}-${{ matrix.name }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$REGISTRY/$REPOSITORY:$TAG" -t "$REGISTRY/$REPOSITORY:latest" "${{ matrix.context }}"
+          docker push "$REGISTRY/$REPOSITORY:$TAG"
+          docker push "$REGISTRY/$REPOSITORY:latest"
+
+      - name: Fetch current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${{ env.NAME_PREFIX }}-${{ matrix.name }}" \
+            --query taskDefinition > task-def.json
+
+      - name: Update image in task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-def.json
+          container-name: ${{ matrix.container }}
+          image: ${{ steps.ecr.outputs.registry }}/${{ env.NAME_PREFIX }}-${{ matrix.name }}:${{ github.sha }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.NAME_PREFIX }}-${{ matrix.name }}
+          cluster: ${{ env.NAME_PREFIX }}-cluster
+          wait-for-service-stability: true

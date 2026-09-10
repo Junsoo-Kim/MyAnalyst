@@ -1,5 +1,6 @@
 package khu_swcon.myanalyst.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -13,10 +14,13 @@ public class WebConfig implements WebMvcConfigurer {
         this.sessionAuthInterceptor = sessionAuthInterceptor;
     }
 
+    @Value("${app.cors.allowed-origins:http://localhost:3000}")
+    private String[] allowedOrigins;
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**")  // Apply to all endpoints
-                .allowedOrigins("http://localhost:3000")  // React frontend URL
+        registry.addMapping("/**")
+                .allowedOrigins(allowedOrigins)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);

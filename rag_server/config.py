@@ -9,6 +9,8 @@ load_dotenv()
 # API 키는 환경 변수에서 불러옵니다
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL") or None
+
 # LLM 모델 설정도 환경 변수에서 불러옵니다
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")  # 기본값 설정
 KEYWORD_LLM_MODEL = os.getenv("KEYWORD_LLM_MODEL", "gpt-4o-mini")
@@ -34,6 +36,14 @@ SEARCH_PARAMS = {
     # For HNSW index:
     # "params": {"ef": 64}
 }
+
+HYBRID_SEARCH_ENABLED = os.getenv("HYBRID_SEARCH_ENABLED", "true").lower() == "true"
+BM25_TOP_K = int(os.getenv("BM25_TOP_K", str(SEARCH_TOP_K)))
+RRF_K = int(os.getenv("RRF_K", "60"))
+
+CORRECTIVE_RAG_ENABLED = os.getenv("CORRECTIVE_RAG_ENABLED", "true").lower() == "true"
+GRADER_LLM_MODEL = os.getenv("GRADER_LLM_MODEL", "gpt-4o-mini")
+MAX_GROUNDING_RETRIES = int(os.getenv("MAX_GROUNDING_RETRIES", "2"))
 
 # --- Field Mappings per Collection ---
 # Define the name of the field containing the main text content for each collection

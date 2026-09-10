@@ -8,6 +8,7 @@ from datetime import datetime
 # Import utility functions and config
 import utils
 import config
+import hybrid_search
 from prompts import build_base_prompt, create_keyword_prompt, create_summary_prompt, parse_nested_chapter
 
 # 로깅을 위한 디렉토리 설정
@@ -26,7 +27,7 @@ def save_debug_info(section_number, section_title, keywords, retrieved_data, pro
         summary = {
             "id": item.get("id"),
             "collection": item.get("collection"),
-            "score": item.get("score"),
+            "score": item.get("rrf_score", item.get("score")),
             "text_preview": item.get("text", "")[:200] + "..." if item.get("text") else ""
         }
         retrieval_summary.append(summary)
@@ -50,6 +51,62 @@ def save_debug_info(section_number, section_title, keywords, retrieved_data, pro
 
 def generate_report_section(section_number: str, section_title: str, report_params: Dict, subsections: Dict = None) -> str:
     """Generates content for a single report section using the RAG pipeline."""
+    if config.CORRECTIVE_RAG_ENABLED:
+        return _generate_report_section_graph(section_number, section_title, report_params, subsections)
+    return _generate_report_section_legacy(section_number, section_title, report_params, subsections)
+
+
+def _generate_report_section_graph(section_number: str, section_title: str, report_params: Dict, subsections: Dict = None) -> str:
+    import corrective_rag_graph
+
+    print(f"\n--- Generating Section {section_number}: {section_title} (corrective RAG graph) ---")
+    start_time = time.time()
+
+    subsection_info = ""
+    if subsections and len(subsections) > 0:
+        subsection_info = "이 섹션은 다음과 같은 하위 섹션을 포함하고 있습니다:\n"
+        for sub_num, sub_data in subsections.items():
+            subsection_info += f"  - {sub_num} {sub_data['title']}\n"
+        subsection_info += "각 하위 섹션에 맞게 내용을 구성해주세요.\n"
+
+    initial_state = {
+        "section_number": section_number,
+        "section_title": section_title,
+        "subsection_info": subsection_info,
+        "report_params": report_params,
+        "keywords": "",
+        "retrieved_docs": [],
+        "context": "",
+        "draft": "",
+        "is_grounded": False,
+        "grounding_feedback": "",
+        "retry_count": 0,
+    }
+
+    graph = corrective_rag_graph.get_section_graph()
+    final_state = graph.invoke(initial_state, config={"recursion_limit": 25})
+
+    section_content = final_state["draft"]
+    expected_heading = f"### {section_number}. {section_title}"
+    if not section_content.strip().startswith(expected_heading):
+        section_content = f"{expected_heading}\n\n{section_content}"
+
+    elapsed = time.time() - start_time
+    print(
+        f"Section {section_number} generation finished in {elapsed:.2f}s "
+        f"(grounded={final_state['is_grounded']}, retries={final_state['retry_count'] - 1})"
+    )
+
+    debug_prompt_preview = f"[keywords]\n{final_state['keywords']}\n\n[context]\n{final_state['context'][:1000]}"
+    save_debug_info(
+        section_number, section_title, final_state["keywords"],
+        final_state["retrieved_docs"], debug_prompt_preview, section_content,
+    )
+
+    return section_content
+
+
+def _generate_report_section_legacy(section_number: str, section_title: str, report_params: Dict, subsections: Dict = None) -> str:
     print(f"\n--- Generating Section {section_number}: {section_title} ---")
     start_time = time.time()
 
@@ -91,11 +148,12 @@ def generate_report_section(section_number: str, section_title: str, report_para
     print("Keyword embedding complete.")
 
     # 3. Search Milvus
-    print("Searching Milvus for relevant context...")
-    retrieved_data = utils.search_milvus(
-        keyword_embedding,
-        config.COLLECTION_NAMES,
-        config.SEARCH_TOP_K
+    print("Searching for relevant context (hybrid: dense + BM25 + RRF)...")
+    retrieved_data = hybrid_search.hybrid_search(
+        query_text=keywords,
+        query_vector=keyword_embedding,
+        collection_names=config.COLLECTION_NAMES,
+        top_k=config.SEARCH_TOP_K
     )
     if not retrieved_data:
         print("No relevant context found in Milvus. Using fallback prompt...")
@@ -108,7 +166,7 @@ def generate_report_section(section_number: str, section_title: str, report_para
             print(f"[DEBUG] 검색결과 샘플 {i+1}:")
             print(f"  ID: {item.get('id')}")
             print(f"  Collection: {item.get('collection')}")
-            print(f"  Score: {item.get('score')}")
+            print(f"  Score: {item.get('rrf_score', item.get('score'))}")
             text_preview = item.get('text', '')[:200] + "..." if len(item.get('text', '')) > 200 else item.get('text', '')
             print(f"  Text preview: {text_preview}")
         

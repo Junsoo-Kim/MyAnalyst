@@ -194,10 +194,9 @@ def search_milvus(query_vector: np.ndarray, collection_names_list: List[str], to
                             if query_result and len(query_result) > 0:
                                 direct_data = query_result[0]
                                 print(f"  Direct query result keys: {list(direct_data.keys())[:5]}")
-                                
-                                # 직접 쿼리에서 텍스트 필드 추출
-                                if text_field in direct_data:
-                                    entity_data[text_field] = direct_data[text_field]
+
+                                entity_data.update(direct_data)
+                                if text_field in entity_data and entity_data.get(text_field):
                                     print(f"  Text retrieved from direct query: {entity_data[text_field][:50]}...")
                                 else:
                                     print(f"  Warning: Text field '{text_field}' still not found after direct query")
@@ -293,6 +292,10 @@ def format_context(retrieved_chunks: List[Dict[str, Any]]) -> str:
         
     return context_str.strip()
 
+def get_openai_client() -> OpenAI:
+    return OpenAI(api_key=config.OPENAI_API_KEY, base_url=config.OPENAI_BASE_URL)
+
+
 # --- LLM Interaction Functions ---
 def ask_llm(query: str, context: str = "", base_prompt: str = prompts.BASE_PROMPT_TEXT, model: str = config.LLM_MODEL) -> str:
     """Sends a query and context to the LLM and returns the answer."""
@@ -327,6 +330,7 @@ def ask_llm(query: str, context: str = "", base_prompt: str = prompts.BASE_PROMP
     print(f"[DEBUG] 컨텍스트 길이: {len(context) if context else 0} 자")
     
     try:
+<<<<<<< HEAD
         client = OpenAI(api_key=config.OPENAI_API_KEY)
         with observability.time_llm_call(model, "ask_llm") as usage:
             response = client.chat.completions.create(
@@ -339,6 +343,18 @@ def ask_llm(query: str, context: str = "", base_prompt: str = prompts.BASE_PROMP
                 # max_tokens=1500 # Optional: Limit response length
             )
             observability.record_usage(usage, response)
+=======
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that answers questions based ONLY on the provided context in Korean. You must explicitly state when information is not available. Do not use outside knowledge."},
+                {"role": "user", "content": full_prompt}
+            ],
+            temperature=0.7, # Adjust creativity
+            # max_tokens=1500 # Optional: Limit response length
+        )
+>>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
         answer = response.choices[0].message.content.strip()
         return answer
     except OpenAIError as oai_err:
@@ -457,6 +473,7 @@ def extract_domain_specific_terms(report_text: str) -> List[Dict[str, str]]:
         else:
             text_for_extraction = report_text
             
+<<<<<<< HEAD
         client = OpenAI(api_key=config.OPENAI_API_KEY)
         with observability.time_llm_call(config.LLM_MODEL, "extract_domain_terms") as usage:
             response = client.chat.completions.create(
@@ -470,6 +487,19 @@ def extract_domain_specific_terms(report_text: str) -> List[Dict[str, str]]:
             )
             observability.record_usage(usage, response)
 
+=======
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model=config.LLM_MODEL,  # Use the same model as for report generation
+            messages=[
+                {"role": "system", "content": "You are a financial expert who can identify domain-specific terms in corporate analysis reports. Return your response in valid JSON format."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,  # Lower temperature for more deterministic results
+            response_format={"type": "json_object"}  # Request JSON format
+        )
+        
+>>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
         result = response.choices[0].message.content.strip()
         print(f"LLM returned domain terms response of length: {len(result)}")
         
@@ -546,6 +576,7 @@ def answer_question_about_report(question: str, report_content: str) -> str:
 """
     
     try:
+<<<<<<< HEAD
         client = OpenAI(api_key=config.OPENAI_API_KEY)
         with observability.time_llm_call(config.LLM_MODEL, "answer_question") as usage:
             response = client.chat.completions.create(
@@ -558,6 +589,18 @@ def answer_question_about_report(question: str, report_content: str) -> str:
             )
             observability.record_usage(usage, response)
 
+=======
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model=config.LLM_MODEL,
+            messages=[
+                {"role": "system", "content": "당신은 기업 분석 보고서를 바탕으로 질문에 정확하게 답변하는 전문가입니다. 오직 보고서에 포함된 정보만을 사용하여 답변하세요."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5,  # 응답의 일관성을 위해 낮은 온도 사용
+        )
+        
+>>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
         answer = response.choices[0].message.content.strip()
         return answer
         
@@ -615,7 +658,7 @@ def transcribe_audio(audio_content: bytes) -> str:
         print(f"임시 오디오 파일 저장됨: {temp_audio_path} (크기: {len(audio_content)} 바이트)")
         
         try:
-            client = OpenAI(api_key=config.OPENAI_API_KEY)
+            client = get_openai_client()
             
             with open(temp_audio_path, "rb") as audio_file:
                 print("Whisper API 호출 중...")

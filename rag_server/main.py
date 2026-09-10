@@ -14,6 +14,7 @@ import utils  # First import utils
 import crawling  # Then import crawling
 from crawling import NewsItemResponse  # Import specific classes
 import config  # Config import is fine
+import hybrid_search
 import rag_report_pipeline  # Import RAG pipeline last since it depends on utils
 
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -46,6 +47,15 @@ async def trace_request(request, call_next):
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(observability.registry), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.on_event("startup")
+async def prewarm_hybrid_search_index():
+    try:
+        utils.ensure_milvus_connection()
+        hybrid_search.build_bm25_index()
+    except Exception as e:
+        print(f"[WARN] BM25 인덱스 사전 구축 실패 (첫 검색 요청 시 재시도됩니다): {e}")
 
 # --- Pydantic Models (for potential future request/response structure) ---
 class ReportRequest(BaseModel):
