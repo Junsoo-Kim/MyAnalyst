@@ -11,7 +11,6 @@ import khu_swcon.myanalyst.exception.ApiException;
 import khu_swcon.myanalyst.repository.ChatRepository;
 import khu_swcon.myanalyst.repository.ReportRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -33,9 +32,6 @@ public class ChatService {
     private final ChatRepository chatRepository;
     private final ReportRepository reportRepository;
     private final WebClient webClient;
-
-    @Value("${rag.server.base-url}")
-    private String ragServerBaseUrl;
 
     @Autowired
     public ChatService(ChatRepository chatRepository, ReportRepository reportRepository, WebClient ragWebClient) {
@@ -64,11 +60,7 @@ public class ChatService {
         
         try {
             Map<String, Object> response = webClient.post()
-<<<<<<< HEAD
                     .uri("/questions")
-=======
-                    .uri(ragServerBaseUrl + "/questions")
->>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
@@ -173,11 +165,7 @@ public class ChatService {
             
             // 3. 외부 API 호출
             Map<String, Object> response = webClient.post()
-<<<<<<< HEAD
                     .uri("/questions/stt")
-=======
-                    .uri(ragServerBaseUrl + "/questions/stt")
->>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .body(BodyInserters.fromMultipartData(builder.build()))
                     .retrieve()

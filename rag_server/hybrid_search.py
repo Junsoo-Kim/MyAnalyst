@@ -1,30 +1,79 @@
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+from opensearchpy import OpenSearch, helpers
 from pymilvus import Collection, utility
-from rank_bm25 import BM25Okapi
 
 import config
 import utils
 
-_bm25_state: Dict[str, Any] = {
-    "index": None,
-    "chunks": [],
-}
+_opensearch_client: Optional[OpenSearch] = None
+
 
 def _tokenize(text: str) -> List[str]:
+    """OpenSearch의 기본(standard) 분석기는 한국어 조사·어미를 떼어내지 못한다
+    ("영업이익은"과 "영업이익"을 다른 토큰으로 본다). KLUE-BERT WordPiece
+    토크나이저로 색인·질의 양쪽을 똑같이 미리 나눠, `search_tokens` 필드에는
+    이미 토큰화된 문자열만 whitespace 분석기로 넣는다."""
     if not text:
         return []
     if utils.tokenizer is None:
         return text.split()
     return utils.tokenizer.tokenize(text)
 
-def build_bm25_index(force: bool = False) -> None:
-    if _bm25_state["index"] is not None and not force:
+
+def get_opensearch_client() -> OpenSearch:
+    global _opensearch_client
+    if _opensearch_client is None:
+        _opensearch_client = OpenSearch(
+            hosts=[{"host": config.OPENSEARCH_HOST, "port": config.OPENSEARCH_PORT}],
+            use_ssl=False,
+            verify_certs=False,
+        )
+    return _opensearch_client
+
+
+def _ensure_index(client: OpenSearch) -> None:
+    if client.indices.exists(index=config.OPENSEARCH_INDEX):
         return
+    client.indices.create(
+        index=config.OPENSEARCH_INDEX,
+        body={
+            "settings": {"index": {"number_of_shards": 1, "number_of_replicas": 0}},
+            "mappings": {
+                "properties": {
+                    "collection": {"type": "keyword"},
+                    "milvus_id": {"type": "keyword"},
+                    "text": {"type": "text", "index": False},
+                    "search_tokens": {"type": "text", "analyzer": "whitespace"},
+                }
+            },
+        },
+    )
+
+
+def build_bm25_index(force: bool = False) -> None:
+    """Milvus 컬렉션의 텍스트를 OpenSearch에 색인한다.
+
+    인덱스는 Worker 프로세스가 아니라 OpenSearch가 들고 있으므로, 여러 Worker가
+    같은 인덱스를 공유한다 — Worker 수만큼 메모리를 중복 소비하지 않는다. 이미
+    문서가 있으면(다른 Worker가 먼저 색인했거나 이전 실행에서 남아 있으면)
+    `force=True`가 아닌 한 다시 읽지 않는다.
+    """
+    client = get_opensearch_client()
+    _ensure_index(client)
+
+    if not force:
+        count = client.count(index=config.OPENSEARCH_INDEX)["count"]
+        if count > 0:
+            return
+        client.indices.refresh(index=config.OPENSEARCH_INDEX)
+        count = client.count(index=config.OPENSEARCH_INDEX)["count"]
+        if count > 0:
+            return
 
     utils.ensure_milvus_connection()
-    print("[BM25] Building sparse index from Milvus collections...")
+    print("[BM25] Indexing Milvus collections into OpenSearch...")
     start = time.time()
 
     chunks: List[Dict[str, Any]] = []
@@ -65,39 +114,55 @@ def build_bm25_index(force: bool = False) -> None:
                     chunk[field] = row[field]
             chunks.append(chunk)
 
+    if force:
+        client.delete_by_query(
+            index=config.OPENSEARCH_INDEX, body={"query": {"match_all": {}}}
+        )
+
     if not chunks:
         print("  [BM25] No documents found across collections. Sparse search will return empty.")
-        _bm25_state["index"] = None
-        _bm25_state["chunks"] = []
         return
 
-    tokenized_corpus = [_tokenize(c["text"]) for c in chunks]
-    _bm25_state["index"] = BM25Okapi(tokenized_corpus)
-    _bm25_state["chunks"] = chunks
+    def actions():
+        for chunk in chunks:
+            source = dict(chunk)
+            milvus_id = source.pop("id")
+            source["milvus_id"] = milvus_id
+            source["search_tokens"] = " ".join(_tokenize(str(chunk["text"])))
+            yield {
+                "_index": config.OPENSEARCH_INDEX,
+                "_id": f"{chunk['collection']}:{milvus_id}",
+                "_source": source,
+            }
 
-    print(f"  [BM25] Indexed {len(chunks)} chunks in {time.time() - start:.2f}s.")
+    helpers.bulk(client, actions())
+    client.indices.refresh(index=config.OPENSEARCH_INDEX)
+
+    print(f"  [BM25] Indexed {len(chunks)} chunks into OpenSearch in {time.time() - start:.2f}s.")
+
 
 def search_bm25(query: str, top_k: int) -> List[Dict[str, Any]]:
     build_bm25_index()
 
-    if _bm25_state["index"] is None:
+    query_tokens = " ".join(_tokenize(query))
+    if not query_tokens:
         return []
 
-    tokenized_query = _tokenize(query)
-    if not tokenized_query:
-        return []
-
-    scores = _bm25_state["index"].get_scores(tokenized_query)
-    chunks = _bm25_state["chunks"]
-
-    ranked_indices = sorted(range(len(chunks)), key=lambda i: scores[i], reverse=True)[:top_k]
+    client = get_opensearch_client()
+    response = client.search(
+        index=config.OPENSEARCH_INDEX,
+        body={
+            "size": top_k,
+            "query": {"match": {"search_tokens": {"query": query_tokens}}},
+        },
+    )
 
     results = []
-    for i in ranked_indices:
-        if scores[i] <= 0:
-            continue
-        chunk = dict(chunks[i])
-        chunk["score"] = float(scores[i])
+    for hit in response["hits"]["hits"]:
+        chunk = dict(hit["_source"])
+        chunk.pop("search_tokens", None)
+        chunk["id"] = chunk.pop("milvus_id", None)
+        chunk["score"] = float(hit["_score"])
         results.append(chunk)
     return results
 

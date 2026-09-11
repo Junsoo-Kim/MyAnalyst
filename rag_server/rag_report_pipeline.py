@@ -9,6 +9,7 @@ from datetime import datetime
 import utils
 import config
 import hybrid_search
+import section_checkpoints
 from prompts import build_base_prompt, create_keyword_prompt, create_summary_prompt, parse_nested_chapter
 
 # 로깅을 위한 디렉토리 설정
@@ -230,11 +231,12 @@ def _generate_report_section_legacy(section_number: str, section_title: str, rep
     return section_content
 
 
-def generate_full_report(title="기업 분석 보고서", company="셀트리온", date="24년 4분기", 
-                        chapter="", indicator="none", evaluations="") -> str:
+def generate_full_report(title="기업 분석 보고서", company="셀트리온", date="24년 4분기",
+                        chapter="", indicator="none", evaluations="",
+                        generation_job_id: Optional[str] = None) -> str:
     """
     Orchestrates the generation of the full multi-section report.
-    
+
     Args:
         title: 보고서 제목
         company: 분석 대상 기업
@@ -242,6 +244,8 @@ def generate_full_report(title="기업 분석 보고서", company="셀트리온"
         chapter: 목차 목록 (중첩 구조 가능)
         indicator: 관심 지표 (없으면 'none')
         evaluations: 섹션별 평가 기준 (\n\n으로 구분)
+        generation_job_id: 지정하면 섹션별 생성 결과를 체크포인트로 저장해, 이 함수가
+            중간에 죽어도 재시도 시 이미 만든 섹션은 다시 생성하지 않는다.
     """
     full_report_start_time = time.time()
     print(f"Starting full report generation for '{title}' about {company} ({date})...")
@@ -291,6 +295,10 @@ def generate_full_report(title="기업 분석 보고서", company="셀트리온"
     print(f"Generation order (after processing): {generation_order}")
     
     generated_sections = {}
+    if generation_job_id:
+        generated_sections.update(section_checkpoints.load_sections(generation_job_id))
+        if generated_sections:
+            print(f"[checkpoint] job={generation_job_id}: {sorted(generated_sections)} 섹션을 이전 시도에서 복원")
 
     # Generate content sections first (excluding summary)
     processed_sections = set()  # 이미 처리된 섹션을 추적하기 위한 세트
@@ -313,12 +321,14 @@ def generate_full_report(title="기업 분석 보고서", company="셀트리온"
             
             # 해당 섹션 생성 (하위 섹션 정보 포함)
             generated_content = generate_report_section(
-                section_key, 
-                section_title, 
+                section_key,
+                section_title,
                 report_params,
                 subsections
             )
             generated_sections[section_key] = generated_content
+            if generation_job_id:
+                section_checkpoints.save_section(generation_job_id, section_key, generated_content)
         else:
              print(f"Warning: Section key '{section_key}' not found in sections mapping or already processed.")
 
@@ -329,11 +339,13 @@ def generate_full_report(title="기업 분석 보고서", company="셀트리온"
     )
 
     # Generate Summary section
-    if summary_key and summary_key in sections:
+    if summary_key and summary_key in sections and summary_key in generated_sections:
+        print(f"Section {summary_key} (Summary) already generated. Skipping.")
+    elif summary_key and summary_key in sections:
         summary_section_title = sections[summary_key]["title"]
         print(f"\n--- Generating Section {summary_key}: {summary_section_title} ---")
         summary_start_time = time.time()
-        
+
         # 동적으로 생성된 요약 프롬프트 사용
         summary_content = utils.generate_summary_from_sections(
             combined_context_for_summary,
@@ -341,7 +353,7 @@ def generate_full_report(title="기업 분석 보고서", company="셀트리온"
             date=date,
             title=title
         )
-        
+
         summary_end_time = time.time()
         print(f"Section {summary_key} (Summary) generation finished in {summary_end_time - summary_start_time:.2f} seconds.")
 
@@ -350,6 +362,8 @@ def generate_full_report(title="기업 분석 보고서", company="셀트리온"
         if not summary_content.strip().startswith(expected_summary_heading):
              summary_content = f"{expected_summary_heading}\n\n{summary_content}"
         generated_sections[summary_key] = summary_content
+        if generation_job_id:
+            section_checkpoints.save_section(generation_job_id, summary_key, summary_content)
     else:
         print("Warning: No summary section defined.")
 
@@ -371,6 +385,9 @@ def generate_full_report(title="기업 분석 보고서", company="셀트리온"
     full_report_end_time = time.time()
     total_time = full_report_end_time - full_report_start_time
     print(f"\nFull report generation completed in {total_time:.2f} seconds.")
+
+    if generation_job_id:
+        section_checkpoints.clear_job(generation_job_id)
 
     return final_report
 

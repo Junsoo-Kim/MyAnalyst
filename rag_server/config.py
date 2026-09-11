@@ -41,6 +41,14 @@ HYBRID_SEARCH_ENABLED = os.getenv("HYBRID_SEARCH_ENABLED", "true").lower() == "t
 BM25_TOP_K = int(os.getenv("BM25_TOP_K", str(SEARCH_TOP_K)))
 RRF_K = int(os.getenv("RRF_K", "60"))
 
+# --- OpenSearch (BM25) Settings ---
+# BM25는 Worker 프로세스 메모리가 아니라 OpenSearch에 인덱싱한다. 여러 Worker가
+# 같은 인덱스를 공유해 중복 메모리 사용을 없애고, 인덱싱은 별도 프로세스에서 한 번만
+# 수행하면 되므로 신규 문서 반영에 Worker 재시작이 필요 없다.
+OPENSEARCH_HOST = os.getenv("OPENSEARCH_HOST", "localhost")
+OPENSEARCH_PORT = int(os.getenv("OPENSEARCH_PORT", "9200"))
+OPENSEARCH_INDEX = os.getenv("OPENSEARCH_INDEX", "myanalyst-chunks")
+
 CORRECTIVE_RAG_ENABLED = os.getenv("CORRECTIVE_RAG_ENABLED", "true").lower() == "true"
 GRADER_LLM_MODEL = os.getenv("GRADER_LLM_MODEL", "gpt-4o-mini")
 MAX_GROUNDING_RETRIES = int(os.getenv("MAX_GROUNDING_RETRIES", "2"))

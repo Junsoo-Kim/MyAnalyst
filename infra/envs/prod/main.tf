@@ -105,7 +105,7 @@ module "ecs_service_be" {
   memory         = 1024
 
   environment = {
-    RAG_SERVER_BASE_URL        = "http://rag-server:8000"
+    RAG_SERVER_URL             = "http://rag-server:8000"
     CORS_ALLOWED_ORIGINS       = var.fe_origin
     REDIS_HOST                 = module.elasticache.redis_endpoint
     REDIS_PORT                 = tostring(module.elasticache.redis_port)

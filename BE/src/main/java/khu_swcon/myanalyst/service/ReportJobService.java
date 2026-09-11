@@ -13,6 +13,7 @@ import khu_swcon.myanalyst.observability.ReportJobMetrics;
 import khu_swcon.myanalyst.observability.TraceContext;
 import khu_swcon.myanalyst.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -69,7 +70,6 @@ public class ReportJobService {
         this.outboxMaxAttempts = outboxMaxAttempts;
     }
 
-    @Transactional
     public ReportJobResponseDto enqueue(ReportJobRequestDto request, String userId, String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new ApiException("Idempotency-Key header is required", HttpStatus.BAD_REQUEST);
@@ -84,6 +84,16 @@ public class ReportJobService {
             return ReportJobResponseDto.from(existing);
         }
 
+        try {
+            return transactionTemplate.execute(status -> createJob(request, userId, idempotencyKey));
+        } catch (DataIntegrityViolationException raceLost) {
+            ReportJob winner = jobRepository.findByUser_UseridAndIdempotencyKey(userId, idempotencyKey)
+                    .orElseThrow(() -> raceLost);
+            return ReportJobResponseDto.from(winner);
+        }
+    }
+
+    private ReportJobResponseDto createJob(ReportJobRequestDto request, String userId, String idempotencyKey) {
         User user = userRepository.findByUserid(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
         Instant now = Instant.now();
@@ -107,7 +117,10 @@ public class ReportJobService {
                 .company(request.getCompany())
                 .date(request.getDate())
                 .build();
-        ReportJob savedJob = jobRepository.save(job);
+        // 동시에 같은 Idempotency-Key로 들어온 다른 요청이 먼저 커밋되면 유니크 제약
+        // 위반으로 여기서 실패한다 — saveAndFlush로 즉시 반영해 그 실패를 이 트랜잭션
+        // 안에서 바로 확인한다(지연 flush면 이 메서드가 반환된 뒤에야 터진다).
+        ReportJob savedJob = jobRepository.saveAndFlush(job);
         enqueueOutboxEvent(savedJob.getJobId(), now);
         reportJobMetrics.recordStatus(ReportJobStatus.QUEUED.name());
         return ReportJobResponseDto.from(savedJob);
@@ -176,6 +189,10 @@ public class ReportJobService {
         if (Boolean.TRUE.equals(transactionTemplate.execute(status -> claim(jobId)))) {
             reportJobExecutor.submit(() -> execute(jobId));
         }
+    }
+
+    boolean claimForTest(UUID jobId) {
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> claim(jobId)));
     }
 
     private boolean claimOutboxEvent(UUID eventId) {

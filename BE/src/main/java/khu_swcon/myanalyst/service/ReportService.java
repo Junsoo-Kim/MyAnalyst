@@ -15,7 +15,6 @@ import khu_swcon.myanalyst.repository.ReportRepository;
 import khu_swcon.myanalyst.repository.UserRepository;
 import khu_swcon.myanalyst.repository.DictionaryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -45,20 +44,12 @@ public class ReportService {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
-    @Value("${rag.server.base-url}")
-    private String ragServerBaseUrl;
-
     @Autowired
     public ReportService(ReportRepository reportRepository,
-<<<<<<< HEAD
                         UserRepository userRepository,
                         DictionaryRepository dictionaryRepository,
                         WebClient ragWebClient,
                         ObjectMapper objectMapper) {
-=======
-                        UserRepository userRepository, 
-                        DictionaryRepository dictionaryRepository) {
->>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
         this.reportRepository = reportRepository;
         this.userRepository = userRepository;
         this.dictionaryRepository = dictionaryRepository;
@@ -139,15 +130,14 @@ public class ReportService {
         requestBody.put("indicator", report.getIndicator());
         
         requestBody.put("evaluations", evaluations == null ? "" : evaluations);
-        
+        if (report.getGenerationJobId() != null) {
+            requestBody.put("generation_job_id", report.getGenerationJobId().toString());
+        }
+
         // API 호출 및 응답 처리
         try {
             Map<String, Object> response = webClient.post()
-<<<<<<< HEAD
                     .uri("/reports")
-=======
-                    .uri(ragServerBaseUrl + "/reports")
->>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
@@ -284,11 +274,7 @@ public class ReportService {
         try {
             // API 호출 및 응답 처리
             return webClient.get()
-<<<<<<< HEAD
                     .uri("/news/{company}", company)
-=======
-                    .uri(ragServerBaseUrl + "/news/{company}", company)
->>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
                     .retrieve()
                     .bodyToFlux(NewsDto.class)
                     .collectList()
@@ -310,11 +296,7 @@ public class ReportService {
         try {
             // API 호출 및 응답 처리
             return webClient.get()
-<<<<<<< HEAD
                     .uri("/stocks/{company}", company)
-=======
-                    .uri(ragServerBaseUrl + "/stocks/{company}", company)
->>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
                     .retrieve()
                     .bodyToMono(StockDto.class)
                     .block(); // 동기적으로 응답 대기
@@ -333,11 +315,7 @@ public class ReportService {
         try {
             // API 호출 및 응답 처리
             byte[] imageBytes = webClient.get()
-<<<<<<< HEAD
                     .uri("/stocks/{company}/chart-image", company)
-=======
-                    .uri(ragServerBaseUrl + "/stocks/{company}/chart-image", company)
->>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
                     .accept(MediaType.IMAGE_PNG, MediaType.IMAGE_JPEG, MediaType.APPLICATION_OCTET_STREAM)
                     .retrieve()
                     .bodyToMono(byte[].class)

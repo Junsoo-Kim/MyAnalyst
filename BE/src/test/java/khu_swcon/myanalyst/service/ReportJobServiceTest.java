@@ -116,7 +116,7 @@ class ReportJobServiceTest {
         ReportJobResponseDto response = service.enqueue(request(), "u1", "key-1");
 
         assertThat(response.getJobId()).isEqualTo(existing.getJobId());
-        verify(jobRepository, never()).save(any());
+        verify(jobRepository, never()).saveAndFlush(any());
         verify(outboxEventRepository, never()).save(any());
     }
 
@@ -124,7 +124,7 @@ class ReportJobServiceTest {
     void enqueue_createsJobAndOutboxEvent_onFirstRequest() {
         when(jobRepository.findByUser_UseridAndIdempotencyKey("u1", "key-1")).thenReturn(Optional.empty());
         when(userRepository.findByUserid("u1")).thenReturn(Optional.of(user("u1")));
-        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(jobRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         ReportJobResponseDto response = service.enqueue(request(), "u1", "key-1");
 

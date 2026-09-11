@@ -65,6 +65,10 @@ class ReportRequest(BaseModel):
     chapter: str = Field(..., min_length=1)
     indicator: str = Field(default="none", max_length=500)
     evaluations: str = ""
+    generation_job_id: Optional[str] = Field(
+        default=None,
+        description="지정하면 섹션별 생성 결과를 체크포인트로 저장해 재시도 시 재사용한다.",
+    )
 
 class ReportResponse(BaseModel):
     report: str
@@ -166,6 +170,7 @@ async def create_report(request: ReportRequest):
             request.chapter,
             request.indicator,
             request.evaluations,
+            request.generation_job_id,
         )
 
         # Extract domain-specific terms from the generated report

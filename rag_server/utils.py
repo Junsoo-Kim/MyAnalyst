@@ -330,8 +330,7 @@ def ask_llm(query: str, context: str = "", base_prompt: str = prompts.BASE_PROMP
     print(f"[DEBUG] 컨텍스트 길이: {len(context) if context else 0} 자")
     
     try:
-<<<<<<< HEAD
-        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        client = get_openai_client()
         with observability.time_llm_call(model, "ask_llm") as usage:
             response = client.chat.completions.create(
                 model=model,
@@ -343,18 +342,6 @@ def ask_llm(query: str, context: str = "", base_prompt: str = prompts.BASE_PROMP
                 # max_tokens=1500 # Optional: Limit response length
             )
             observability.record_usage(usage, response)
-=======
-        client = get_openai_client()
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that answers questions based ONLY on the provided context in Korean. You must explicitly state when information is not available. Do not use outside knowledge."},
-                {"role": "user", "content": full_prompt}
-            ],
-            temperature=0.7, # Adjust creativity
-            # max_tokens=1500 # Optional: Limit response length
-        )
->>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
         answer = response.choices[0].message.content.strip()
         return answer
     except OpenAIError as oai_err:
@@ -473,8 +460,7 @@ def extract_domain_specific_terms(report_text: str) -> List[Dict[str, str]]:
         else:
             text_for_extraction = report_text
             
-<<<<<<< HEAD
-        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        client = get_openai_client()
         with observability.time_llm_call(config.LLM_MODEL, "extract_domain_terms") as usage:
             response = client.chat.completions.create(
                 model=config.LLM_MODEL,  # Use the same model as for report generation
@@ -487,19 +473,6 @@ def extract_domain_specific_terms(report_text: str) -> List[Dict[str, str]]:
             )
             observability.record_usage(usage, response)
 
-=======
-        client = get_openai_client()
-        response = client.chat.completions.create(
-            model=config.LLM_MODEL,  # Use the same model as for report generation
-            messages=[
-                {"role": "system", "content": "You are a financial expert who can identify domain-specific terms in corporate analysis reports. Return your response in valid JSON format."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,  # Lower temperature for more deterministic results
-            response_format={"type": "json_object"}  # Request JSON format
-        )
-        
->>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
         result = response.choices[0].message.content.strip()
         print(f"LLM returned domain terms response of length: {len(result)}")
         
@@ -576,8 +549,7 @@ def answer_question_about_report(question: str, report_content: str) -> str:
 """
     
     try:
-<<<<<<< HEAD
-        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        client = get_openai_client()
         with observability.time_llm_call(config.LLM_MODEL, "answer_question") as usage:
             response = client.chat.completions.create(
                 model=config.LLM_MODEL,
@@ -589,18 +561,6 @@ def answer_question_about_report(question: str, report_content: str) -> str:
             )
             observability.record_usage(usage, response)
 
-=======
-        client = get_openai_client()
-        response = client.chat.completions.create(
-            model=config.LLM_MODEL,
-            messages=[
-                {"role": "system", "content": "당신은 기업 분석 보고서를 바탕으로 질문에 정확하게 답변하는 전문가입니다. 오직 보고서에 포함된 정보만을 사용하여 답변하세요."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.5,  # 응답의 일관성을 위해 낮은 온도 사용
-        )
-        
->>>>>>> 71624a165d407f6764b539c319e0702d599ffcc0
         answer = response.choices[0].message.content.strip()
         return answer
         
