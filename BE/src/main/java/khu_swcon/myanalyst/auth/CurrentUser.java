@@ -1,23 +1,21 @@
 package khu_swcon.myanalyst.auth;
 
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 요청의 인증 사용자를 어디서 꺼내는지 아는 유일한 곳.
- * 컨트롤러는 세션 속성을 직접 읽지 않고 이 클래스를 거치므로, 이후 Gateway가 넘겨주는
- * 헤더 방식으로 바꿀 때 auth 모듈만 고치면 된다.
+ *
+ * <p>MSA 4단계부터 BE는 직접 인증하지 않는다. api-gateway가 JWT를 검증한 뒤 그 subject를 {@value #USER_ID_HEADER}
+ * 헤더로 넘기고, 클라이언트가 보낸 같은 이름의 헤더는 지운다. 이 헤더는 Gateway를 거친 요청에서만 믿는다
+ * ({@code GatewayIdentityInterceptor}가 내부 토큰으로 확인한다).
  */
 public final class CurrentUser {
-    public static final String SESSION_ATTRIBUTE = "userId";
+    public static final String USER_ID_HEADER = "X-User-Id";
 
     private CurrentUser() {
     }
 
-    public static String of(HttpSession session) {
-        return (String) session.getAttribute(SESSION_ATTRIBUTE);
-    }
-
-    public static void signIn(HttpSession session, String userId) {
-        session.setAttribute(SESSION_ATTRIBUTE, userId);
+    public static String of(HttpServletRequest request) {
+        return request.getHeader(USER_ID_HEADER);
     }
 }

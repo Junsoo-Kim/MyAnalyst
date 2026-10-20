@@ -6,14 +6,14 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 public class AuthWebConfig implements WebMvcConfigurer {
-    private final SessionAuthInterceptor sessionAuthInterceptor;
+    private final GatewayIdentityInterceptor gatewayIdentityInterceptor;
 
-    public AuthWebConfig(SessionAuthInterceptor sessionAuthInterceptor) {
-        this.sessionAuthInterceptor = sessionAuthInterceptor;
+    public AuthWebConfig(GatewayIdentityInterceptor gatewayIdentityInterceptor) {
+        this.gatewayIdentityInterceptor = gatewayIdentityInterceptor;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(sessionAuthInterceptor);
+        registry.addInterceptor(gatewayIdentityInterceptor);
     }
 }

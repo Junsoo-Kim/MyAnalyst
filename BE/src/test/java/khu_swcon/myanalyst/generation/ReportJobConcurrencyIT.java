@@ -4,9 +4,7 @@ import khu_swcon.myanalyst.generation.ReportJobRequestDto;
 import khu_swcon.myanalyst.generation.ReportJobResponseDto;
 import khu_swcon.myanalyst.generation.internal.ReportJob;
 import khu_swcon.myanalyst.generation.ReportJobStatus;
-import khu_swcon.myanalyst.user.internal.User;
 import khu_swcon.myanalyst.generation.internal.ReportJobRepository;
-import khu_swcon.myanalyst.user.internal.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,19 +44,15 @@ class ReportJobConcurrencyIT {
     @Autowired
     private ReportJobRepository jobRepository;
 
-    @Autowired
-    private UserRepository userRepository;
-
     private UUID jobId;
 
     @BeforeEach
     void setUp() {
-        User user = userRepository.save(User.builder().userid("concurrency-user").password("x").build());
-
+        // 사용자는 user-service가 소유한다(4단계). BE는 Gateway가 검증한 사용자 ID만 받으므로 사용자 행이 필요 없다.
         Instant now = Instant.now();
         ReportJob job = ReportJob.builder()
                 .jobId(UUID.randomUUID())
-                .userId(user.getUserid())
+                .userId("concurrency-user")
                 .idempotencyKey("concurrency-test-key-" + UUID.randomUUID())
                 .traceId("trace-1")
                 .status(ReportJobStatus.QUEUED)

@@ -165,6 +165,8 @@ React ← SSE /report-jobs/{jobId}/events, GET /report-jobs/{jobId}
 
 - 가입 비밀번호를 BCrypt로 저장한다. 기존 평문 개발 계정은 첫 정상 로그인 시 BCrypt로 마이그레이션한다.
 - 로그인은 서버 세션을 만들며, 보고서·채팅·사전·작업 API는 세션 사용자와 소유자가 일치해야 접근할 수 있다.
+  (2026-10-20 MSA 4단계부터 세션 대신 JWT다. auth-service가 발급하고 api-gateway가 검증해 사용자 ID를 넘긴다.
+  소유자 일치 검사는 그대로다. 상세는 [docs/msa/stage4/README.md](docs/msa/stage4/README.md).)
 - Spring → FastAPI 보고서 계약의 필드명을 `evaluations`로 통일했다.
 - RAG base URL과 connect/response timeout은 `RAG_SERVER_URL`, `app.rag.*` 설정으로 분리했다.
 - React API base URL은 `REACT_APP_API_BASE_URL`로 바꿨고, 보고서 HTML은 DOMPurify로 정화한다.

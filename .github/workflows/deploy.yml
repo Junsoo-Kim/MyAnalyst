@@ -34,6 +34,13 @@ jobs:
         working-directory: ./BE
         run: ./mvnw test
 
+      - name: Build edge and identity services (api-gateway, auth-service, user-service)
+        working-directory: ./services
+        run: |
+          for svc in api-gateway auth-service user-service; do
+            (cd "$svc" && chmod +x mvnw && ./mvnw -B -q verify)
+          done
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -78,6 +85,18 @@ jobs:
             context: ./BE
             dockerfile: ./BE/Dockerfile
             container: be
+          - name: api-gateway
+            context: ./services/api-gateway
+            dockerfile: ./services/api-gateway/Dockerfile
+            container: api-gateway
+          - name: auth-service
+            context: ./services/auth-service
+            dockerfile: ./services/auth-service/Dockerfile
+            container: auth-service
+          - name: user-service
+            context: ./services/user-service
+            dockerfile: ./services/user-service/Dockerfile
+            container: user-service
           - name: knowledge
             context: ./services
             dockerfile: ./services/knowledge/Dockerfile

@@ -1,0 +1,5 @@
+target/
+.idea/
+*.iml
+# local JWT signing key (JWK with private key) when run outside Docker
+data/

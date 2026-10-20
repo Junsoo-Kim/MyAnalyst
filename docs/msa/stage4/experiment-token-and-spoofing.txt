@@ -1,0 +1,17 @@
+== E2 토큰 검증
+   토큰 없음                         -> 401
+   토큰 없음 + Origin(CORS 헤더 확인) -> HTTP/1.1 401 Unauthorized Access-Control-Allow-Origin: http://localhost:3000 
+   payload 변조(sub=alice)           -> 401
+   다른 키·HS256 위조 토큰            -> 401
+   alg=none 토큰                      -> 401
+== E3 X-User-Id 위조 (bob으로 로그인한 채 alice의 Job 조회 시도)
+   bob, 헤더 없음                     -> 404
+   bob + X-User-Id: alice             -> 404
+   alice 본인                         -> 200
+   토큰 없이 X-User-Id: alice만       -> 401
+== E4 Gateway 우회 (같은 Docker 네트워크 안에서 직접 호출)
+   be:8080 + X-User-Id: alice (내부 토큰 없음)  -> 403
+   be:8080 + 틀린 내부 토큰                      -> 403
+   user-service 내부 API 직접 호출               -> 403
+   Gateway 경유 /internal/credentials/verify    -> 403
+   호스트에서 BE 포트(8081/8080 외) 노출 여부   -> (비어 있으면 미노출)

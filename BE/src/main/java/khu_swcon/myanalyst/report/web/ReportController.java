@@ -8,7 +8,7 @@ import khu_swcon.myanalyst.shared.ApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 
@@ -22,9 +22,9 @@ public class ReportController {
     }
 
     @GetMapping("/reports")
-    public ResponseEntity<?> getAllReports(HttpSession session) {
+    public ResponseEntity<?> getAllReports(HttpServletRequest request) {
         try {
-            List<ReportListDto> reports = reportService.getReportsOf(CurrentUser.of(session));
+            List<ReportListDto> reports = reportService.getReportsOf(CurrentUser.of(request));
             return new ResponseEntity<>(reports, HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>("Report 목록 조회 중 오류가 발생했습니다: " + e.getMessage(),
@@ -33,9 +33,9 @@ public class ReportController {
     }
 
     @GetMapping("/reports/{reportId}")
-    public ResponseEntity<?> getReportById(@PathVariable Integer reportId, HttpSession session) {
+    public ResponseEntity<?> getReportById(@PathVariable Integer reportId, HttpServletRequest request) {
         try {
-            ReportDetailDto reportDetail = reportService.getReportById(reportId, CurrentUser.of(session));
+            ReportDetailDto reportDetail = reportService.getReportById(reportId, CurrentUser.of(request));
             return new ResponseEntity<>(reportDetail, HttpStatus.OK);
         } catch (ApiException e) {
             return new ResponseEntity<>(e.getMessage(), e.getStatus());
@@ -46,9 +46,9 @@ public class ReportController {
     }
 
     @GetMapping("/reports/user/{userId}")
-    public ResponseEntity<?> getReportsByUserId(@PathVariable String userId, HttpSession session) {
+    public ResponseEntity<?> getReportsByUserId(@PathVariable String userId, HttpServletRequest request) {
         try {
-            if (!CurrentUser.of(session).equals(userId)) {
+            if (!CurrentUser.of(request).equals(userId)) {
                 return new ResponseEntity<>("You do not have access to these reports", HttpStatus.FORBIDDEN);
             }
             List<ReportListDto> reports = reportService.getReportsOf(userId);
@@ -60,9 +60,9 @@ public class ReportController {
     }
 
     @DeleteMapping("/reports/{reportId}")
-    public ResponseEntity<?> deleteReport(@PathVariable Integer reportId, HttpSession session) {
+    public ResponseEntity<?> deleteReport(@PathVariable Integer reportId, HttpServletRequest request) {
         try {
-            reportService.deleteReport(reportId, CurrentUser.of(session));
+            reportService.deleteReport(reportId, CurrentUser.of(request));
             return new ResponseEntity<>(HttpStatus.OK);
         } catch (ApiException e) {
             return new ResponseEntity<>(e.getMessage(), e.getStatus());

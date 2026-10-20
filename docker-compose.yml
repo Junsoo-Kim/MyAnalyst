@@ -234,12 +234,11 @@ services:
       MARKET_DATA_SERVICE_URL: http://market-data:8000
       QA_SERVICE_URL: http://qa:8000
       STT_SERVICE_URL: http://stt:8000
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
-    ports:
-      - "8080:8080"
+      INTERNAL_GATEWAY_TOKEN: ${INTERNAL_GATEWAY_TOKEN:-local-dev-internal-token}
+    # Not published: clients reach the BE only through api-gateway.
     depends_on:
       postgres:
         condition: service_healthy
@@ -248,7 +247,66 @@ services:
       redis:
         condition: service_healthy
 
+  # --- Edge and identity (MSA stage 4) ---
+
+  # The only public entry point (the FE talks to http://localhost:8080 as before).
+  api-gateway:
+    container_name: myanalyst-api-gateway
+    build:
+      context: ./services/api-gateway
+    environment:
+      PORT: 8080
+      BE_URL: http://be:8080
+      AUTH_SERVICE_URL: http://auth-service:8080
+      USER_SERVICE_URL: http://user-service:8080
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      INTERNAL_GATEWAY_TOKEN: ${INTERNAL_GATEWAY_TOKEN:-local-dev-internal-token}
+      LOGIN_RATE_PER_SECOND: ${LOGIN_RATE_PER_SECOND:-1}
+      LOGIN_BURST: ${LOGIN_BURST:-5}
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+
+  auth-service:
+    container_name: myanalyst-auth-service
+    build:
+      context: ./services/auth-service
+    environment:
+      PORT: 8080
+      USER_SERVICE_URL: http://user-service:8080
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-14d}
+      INTERNAL_GATEWAY_TOKEN: ${INTERNAL_GATEWAY_TOKEN:-local-dev-internal-token}
+    volumes:
+      - auth_keys:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  user-service:
+    container_name: myanalyst-user-service
+    build:
+      context: ./services/user-service
+    environment:
+      PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/myanalystdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      INTERNAL_GATEWAY_TOKEN: ${INTERNAL_GATEWAY_TOKEN:-local-dev-internal-token}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
+  auth_keys:
   worker_data:
   etcd_data:
   minio_data:

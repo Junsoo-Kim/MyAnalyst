@@ -1,0 +1,7 @@
+== E9 재시작으로 IP가 바뀐 뒤 라우팅 (Gateway DNS 캐시 상한 5s)
+   before auth=172.19.0.6 user=172.19.0.5
+   after  auth=172.19.0.10 user=172.19.0.6  squatters=172.19.0.5,172.19.0.9
+   [16:32:26] login bob 200 | signup erin1 201
+   [16:32:29] login bob 200 | signup erin2 201
+   [16:32:31] login bob 200 | signup erin3 201
+   [16:32:33] login bob 200 | signup erin4 201

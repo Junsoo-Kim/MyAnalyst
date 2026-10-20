@@ -13,8 +13,6 @@ import khu_swcon.myanalyst.report.GeneratedReport;
 import khu_swcon.myanalyst.report.ReportService;
 import khu_swcon.myanalyst.shared.ApiException;
 import khu_swcon.myanalyst.shared.observability.TraceContext;
-import khu_swcon.myanalyst.user.UserNotFoundException;
-import khu_swcon.myanalyst.user.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -53,7 +51,6 @@ public class ReportJobService {
 
     private final ReportJobRepository jobRepository;
     private final ReportJobAttemptRepository attemptRepository;
-    private final UserService userService;
     private final ReportService reportService;
     private final TransactionTemplate transactionTemplate;
     private final ReportJobMetrics reportJobMetrics;
@@ -64,7 +61,6 @@ public class ReportJobService {
     public ReportJobService(
             ReportJobRepository jobRepository,
             ReportJobAttemptRepository attemptRepository,
-            UserService userService,
             ReportService reportService,
             TransactionTemplate transactionTemplate,
             ReportJobMetrics reportJobMetrics,
@@ -73,7 +69,6 @@ public class ReportJobService {
             @Value("${app.report-jobs.lease-seconds:300}") long leaseSeconds) {
         this.jobRepository = jobRepository;
         this.attemptRepository = attemptRepository;
-        this.userService = userService;
         this.reportService = reportService;
         this.transactionTemplate = transactionTemplate;
         this.reportJobMetrics = reportJobMetrics;
@@ -106,9 +101,6 @@ public class ReportJobService {
     }
 
     private ReportJobResponseDto createJob(ReportJobRequestDto request, String userId, String idempotencyKey) {
-        if (!userService.exists(userId)) {
-            throw new UserNotFoundException("User not found: " + userId);
-        }
         Instant now = Instant.now();
         ReportJob job = ReportJob.builder()
                 .jobId(UUID.randomUUID())

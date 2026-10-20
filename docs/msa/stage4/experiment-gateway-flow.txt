@@ -1,0 +1,16 @@
+signup alice 201
+signup bob 201
+-- 로그인 응답 (Set-Cookie)
+   HTTP/1.1 200 OK
+   Set-Cookie: access_token=<redacted>; Path=/; Max-Age=20; Expires=Tue, 20 Oct 2026 07:23:33 GMT; HttpOnly; SameSite=Lax
+   Set-Cookie: refresh_token=<redacted>; Path=/auth; Max-Age=1209600; Expires=Tue, 03 Nov 2026 07:23:13 GMT; HttpOnly; SameSite=Lax
+   body: {"userid":"alice"}
+-- access token claims
+   {'iss': 'myanalyst-auth', 'sub': 'alice', 'exp': 1792481013, 'iat': 1792480993, 'jti': 'b7deb3a3-842a-4e5f-90bc-2d17f32c4b6d'}
+-- API via cookie: GET /reports -> 200
+-- API via Bearer header: GET /reports -> 200
+-- POST /report-jobs -> 7f1c494c-8d44-4a90-b397-a823bad27836
+-- SSE through gateway:
+     QUEUED | Queued
+     CANCELLED | Cancelled by user
+-- users table owned by user-service: alice:$2a$10$, bob:$2a$10$

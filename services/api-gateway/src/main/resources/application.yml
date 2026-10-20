@@ -1,0 +1,70 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # 공개키는 auth-service에서 받아 캐시한다. 요청마다 auth-service를 부르지 않으므로 auth가 내려가도
+          # 이미 발급된 토큰은 계속 검증된다.
+          jwk-set-uri: ${AUTH_SERVICE_URL:http://localhost:8083}/.well-known/jwks.json
+  cloud:
+    gateway:
+      httpclient:
+        # 내려간 서비스로 가는 요청이 30초(기본값)씩 매달리지 않게 한다.
+        connect-timeout: 2000
+      routes:
+        # 로그인: IP당 초당 1회, 순간 5회까지. 넘으면 429.
+        - id: auth-login
+          uri: ${AUTH_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/sessions
+            - Method=POST
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: ${LOGIN_RATE_PER_SECOND:1}
+                redis-rate-limiter.burstCapacity: ${LOGIN_BURST:5}
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@clientIpKeyResolver}"
+        - id: auth
+          uri: ${AUTH_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/sessions,/auth/**
+        - id: user-signup
+          uri: ${USER_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/users
+            - Method=POST
+        # 나머지 API는 아직 BE(모놀리스)에 있다. 5·6단계에서 서비스를 떼어낼 때 여기 경로만 옮긴다.
+        - id: be
+          uri: ${BE_URL:http://localhost:8081}
+          predicates:
+            - Path=/**
+
+app:
+  jwt:
+    issuer: myanalyst-auth
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  internal-token: ${INTERNAL_GATEWAY_TOKEN:local-dev-internal-token}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,gateway
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

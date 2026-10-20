@@ -10,7 +10,6 @@ import khu_swcon.myanalyst.generation.internal.ReportJobMetrics;
 import khu_swcon.myanalyst.generation.internal.ReportJobRepository;
 import khu_swcon.myanalyst.report.ReportService;
 import khu_swcon.myanalyst.shared.ApiException;
-import khu_swcon.myanalyst.user.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -37,7 +36,6 @@ class ReportJobServiceTest {
 
     private ReportJobRepository jobRepository;
     private ReportJobAttemptRepository attemptRepository;
-    private UserService userService;
     private ReportService reportService;
     private TransactionTemplate transactionTemplate;
     private ReportJobMetrics reportJobMetrics;
@@ -48,7 +46,6 @@ class ReportJobServiceTest {
     void setUp() {
         jobRepository = mock(ReportJobRepository.class);
         attemptRepository = mock(ReportJobAttemptRepository.class);
-        userService = mock(UserService.class);
         reportService = mock(ReportService.class);
         transactionTemplate = mock(TransactionTemplate.class);
         reportJobMetrics = mock(ReportJobMetrics.class);
@@ -68,7 +65,7 @@ class ReportJobServiceTest {
         when(attemptRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         service = new ReportJobService(
-                jobRepository, attemptRepository, userService, reportService,
+                jobRepository, attemptRepository, reportService,
                 transactionTemplate, reportJobMetrics, events, MAX_ATTEMPTS, 300);
     }
 
@@ -118,7 +115,6 @@ class ReportJobServiceTest {
     @Test
     void enqueue_createsJobAndPublishesGenerationRequest_onFirstRequest() {
         when(jobRepository.findByUserIdAndIdempotencyKey("u1", "key-1")).thenReturn(Optional.empty());
-        when(userService.exists("u1")).thenReturn(true);
         when(jobRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         ReportJobResponseDto response = service.enqueue(request(), "u1", "key-1");

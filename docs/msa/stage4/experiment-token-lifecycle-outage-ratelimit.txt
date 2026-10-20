@@ -1,0 +1,31 @@
+== E5 만료와 갱신 (access TTL 90s, 시계 오차 허용 5s)
+   [16:29:28] 로그인 직후 GET /reports                 -> 200
+   [16:31:06] 97초 후, 만료된 토큰(Bearer)            -> 401
+   [16:31:06] POST /auth/refresh                       -> 200
+   [16:31:06] 갱신된 토큰으로 GET /reports             -> 200
+   [16:31:06] 이미 쓴 refresh token 재사용             -> 401
+== E6 auth-service·user-service 중단
+   [16:31:07] auth-service, user-service 중지
+   이미 로그인한 사용자 GET /reports                  -> 200
+   이미 로그인한 사용자 POST /report-jobs             -> 202
+   새 로그인 POST /sessions                           -> 503
+   가입 POST /users                                   -> 503
+   [16:31:20] user-service만 복구, auth 중단 중 가입       -> 201
+   [16:31:28] auth 복구 후, 재시작 전에 발급된 토큰       -> 200  (서명 키를 볼륨에서 다시 읽음)
+   [16:31:28] 복구 직후 login bob 200
+== E7 로그인 rate limit (IP당 초당 1회, 순간 5회)
+   틀린 비밀번호로 10회 연속 로그인 시도 -> 401 401 401 401 401 429 429 429 429 429
+   마지막 응답 헤더: X-RateLimit-Remaining: 0 X-RateLimit-Requested-Tokens: 1 X-RateLimit-Burst-Capacity: 5 X-RateLimit-Replenish-Rate: 1 
+== E8 로그아웃
+   DELETE /sessions                                   -> 204
+   쿠키 jar의 토큰                                    -> access='' refresh=''
+   로그아웃 후 쿠키로 GET /reports                    -> 401
+   로그아웃 전 access token을 직접 붙이면             -> 200  (만료 전까지 유효: 알려진 한계)
+== E9 재시작으로 IP가 바뀐 뒤 라우팅 (DNS 캐시 5s)
+   before myanalyst-auth-service 172.19.0.6
+   before myanalyst-user-service 172.19.0.5
+   after  myanalyst-auth-service 172.19.0.6
+   after  myanalyst-user-service 172.19.0.5
+   [16:31:45] login bob 200 | signup dave1 201
+   [16:31:48] login bob 200 | signup dave2 201
+   [16:31:50] login bob 200 | signup dave3 201

@@ -1,6 +1,6 @@
 package khu_swcon.myanalyst.notification.web;
 
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
 import khu_swcon.myanalyst.auth.CurrentUser;
 import khu_swcon.myanalyst.generation.ReportJobService;
 import khu_swcon.myanalyst.notification.internal.ReportJobEventStream;
@@ -23,8 +23,8 @@ public class ReportJobEventsController {
     }
 
     @GetMapping(value = "/report-jobs/{jobId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter events(@PathVariable UUID jobId, HttpSession session) {
+    public SseEmitter events(@PathVariable UUID jobId, HttpServletRequest request) {
         // 소유권 확인과 현재 상태 조회는 생성 모듈의 공개 API로 한다.
-        return eventStream.subscribe(reportJobService.getJob(jobId, CurrentUser.of(session)));
+        return eventStream.subscribe(reportJobService.getJob(jobId, CurrentUser.of(request)));
     }
 }

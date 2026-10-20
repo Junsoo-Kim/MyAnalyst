@@ -4,7 +4,7 @@ import khu_swcon.myanalyst.auth.CurrentUser;
 import khu_swcon.myanalyst.dictionary.DictionaryService;
 import khu_swcon.myanalyst.dictionary.DomainSpecificTermDto;
 import khu_swcon.myanalyst.shared.ApiException;
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,9 +29,9 @@ public class DictionaryController {
      * @return 도메인 특화 용어 목록
      */
     @GetMapping("/reports/{reportId}/dictionary")
-    public ResponseEntity<?> getDictionaryByReportId(@PathVariable Integer reportId, HttpSession session) {
+    public ResponseEntity<?> getDictionaryByReportId(@PathVariable Integer reportId, HttpServletRequest request) {
         try {
-            List<DomainSpecificTermDto> terms = dictionaryService.getDictionaryByReportId(reportId, CurrentUser.of(session));
+            List<DomainSpecificTermDto> terms = dictionaryService.getDictionaryByReportId(reportId, CurrentUser.of(request));
             return new ResponseEntity<>(terms, HttpStatus.OK);
         } catch (ApiException e) {
             return new ResponseEntity<>(e.getMessage(), e.getStatus());

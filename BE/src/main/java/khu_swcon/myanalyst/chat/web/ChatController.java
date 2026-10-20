@@ -8,7 +8,7 @@ import khu_swcon.myanalyst.chat.ChatService;
 import khu_swcon.myanalyst.chat.ChatSttRequestDto;
 import khu_swcon.myanalyst.chat.ChatSttResponseDto;
 import khu_swcon.myanalyst.shared.ApiException;
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -37,9 +37,9 @@ public class ChatController {
      * @return 생성된 답변
      */
     @PostMapping("/chat")
-    public ResponseEntity<?> processChat(@RequestBody ChatRequestDto chatRequestDto, HttpSession session) {
+    public ResponseEntity<?> processChat(@RequestBody ChatRequestDto chatRequestDto, HttpServletRequest request) {
         try {
-            ChatResponseDto response = chatService.processChat(chatRequestDto, CurrentUser.of(session));
+            ChatResponseDto response = chatService.processChat(chatRequestDto, CurrentUser.of(request));
             return new ResponseEntity<>(response, HttpStatus.OK);
         } catch (ApiException e) {
             return new ResponseEntity<>(e.getMessage(), e.getStatus());
@@ -56,9 +56,9 @@ public class ChatController {
      * @return 생성된 질문과 답변
      */
     @PostMapping(value = "/chat/stt", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> processSttChat(@ModelAttribute ChatSttRequestDto chatSttRequestDto, HttpSession session) {
+    public ResponseEntity<?> processSttChat(@ModelAttribute ChatSttRequestDto chatSttRequestDto, HttpServletRequest request) {
         try {
-            ChatSttResponseDto response = chatService.processSttChat(chatSttRequestDto, CurrentUser.of(session));
+            ChatSttResponseDto response = chatService.processSttChat(chatSttRequestDto, CurrentUser.of(request));
             return new ResponseEntity<>(response, HttpStatus.OK);
         } catch (ApiException e) {
             return new ResponseEntity<>(e.getMessage(), e.getStatus());
@@ -75,9 +75,9 @@ public class ChatController {
      * @return 채팅 기록 목록
      */
     @GetMapping("/reports/{reportId}/chat")
-    public ResponseEntity<?> getChatHistoryByReportId(@PathVariable Integer reportId, HttpSession session) {
+    public ResponseEntity<?> getChatHistoryByReportId(@PathVariable Integer reportId, HttpServletRequest request) {
         try {
-            List<ChatHistoryDto> chats = chatService.getChatHistoryByReportId(reportId, CurrentUser.of(session));
+            List<ChatHistoryDto> chats = chatService.getChatHistoryByReportId(reportId, CurrentUser.of(request));
             return new ResponseEntity<>(chats, HttpStatus.OK);
         } catch (ApiException e) {
             return new ResponseEntity<>(e.getMessage(), e.getStatus());

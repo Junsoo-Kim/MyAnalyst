@@ -1,0 +1,32 @@
+== 수정 전 관찰 (2026-10-20 16:25~16:27, Gateway에 DNS 캐시 상한·연결 타임아웃 설정이 없던 빌드)
+
+실험: auth-service·user-service를 함께 stop → user-service start → auth-service start
+
+컨테이너 IP
+  재시작 전  auth-service=172.19.0.5  user-service=172.19.0.6
+  재시작 후  auth-service=172.19.0.6  user-service=172.19.0.5   (서로 맞바뀜)
+
+증상
+  POST /users     (user-service가 이미 healthy인데)  -> 500
+  POST /sessions  (auth-service가 이미 healthy인데)  -> 404  (응답에 X-RateLimit-* 헤더 = Gateway가 auth 경로로 보냄)
+  user-service에 직접 verify 호출                     -> 200  (서비스 자체는 정상)
+
+api-gateway 로그 (원문 발췌)
+  07:26:16Z ERROR ... 500 Server Error for HTTP POST "/sessions"
+    io.netty.channel.ConnectTimeoutException: connection timed out after 30000 ms: auth-service/172.19.0.5:8080
+  07:26:31Z ERROR ... 500 Server Error for HTTP POST "/users"
+    io.netty.channel.AbstractChannel$AnnotatedNoRouteToHostException: null: user-service/172.19.0.6:8080
+  07:26:41Z ERROR ... 500 Server Error for HTTP POST "/users"
+    io.netty.channel.AbstractChannel$AnnotatedNoRouteToHostException: null: user-service/172.19.0.6:8080
+
+해석
+  Gateway(reactor-netty)가 auth-service를 계속 172.19.0.5로 해석했다. 그 주소는 재시작 후 user-service의 것이라
+  로그인 요청이 user-service로 갔고, user-service에는 /sessions가 없어 404가 났다. user-service의 내부 토큰 검사도
+  막지 못했다 — Gateway가 모든 요청에 내부 토큰을 붙이기 때문이다. 즉 "실패"가 아니라 "다른 서비스로 잘못 전달"이었다.
+  또 auth-service가 멈춘 동안의 로그인은 연결 타임아웃 기본값(30초) 동안 매달렸다가 500으로 끝났다.
+
+수정 (UpstreamClientConfig, application.yml)
+  - reactor-netty 리졸버 캐시 상한 5초, 실패 응답 캐시 0
+  - 연결 타임아웃 2초
+  - 연결 실패(ConnectException, NoRouteToHost, ConnectTimeout, UnknownHost)는 503으로 응답
+수정 후 결과는 experiment-ip-change-routing.txt (user-service가 auth의 이전 IP를 받아도 정상 라우팅).
