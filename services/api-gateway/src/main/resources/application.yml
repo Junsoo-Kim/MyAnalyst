@@ -43,7 +43,22 @@ spring:
           predicates:
             - Path=/users
             - Method=POST
-        # 나머지 API는 아직 BE(모놀리스)에 있다. 5·6단계에서 서비스를 떼어낼 때 여기 경로만 옮긴다.
+        # MSA 5단계: 보고서에 딸린 기능은 report.created 사본으로 동작하는 서비스가 받는다. BE catch-all보다 앞에 둔다.
+        - id: notification
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8087}
+          predicates:
+            - Path=/report-jobs/*/events
+            - Method=GET
+        - id: dictionary
+          uri: ${DICTIONARY_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/reports/*/dictionary
+            - Method=GET
+        - id: chat
+          uri: ${CHAT_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/chat,/chat/stt,/reports/*/chat
+        # 나머지 API(보고서, 보고서 생성 Job, 시장 데이터)는 아직 BE에 있다. 6단계에서 떼어낼 때 여기 경로만 옮긴다.
         - id: be
           uri: ${BE_URL:http://localhost:8081}
           predicates:

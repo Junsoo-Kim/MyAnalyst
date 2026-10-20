@@ -47,7 +47,8 @@ public class ReportService {
                             .generationJobId(generated.generationJobId())
                             .build());
                     events.publishEvent(new ReportCreated(
-                            saved.getReportid(), saved.getGenerationJobId(), saved.getUserId(), generated.terms()));
+                            saved.getReportid(), saved.getGenerationJobId(), saved.getUserId(),
+                            saved.getContent(), generated.terms()));
                     return saved.getReportid();
                 });
     }
@@ -86,17 +87,6 @@ public class ReportService {
         Report report = findOwnedReport(reportId, userId);
         reportRepository.delete(report);
         events.publishEvent(new ReportDeleted(reportId));
-    }
-
-    /** 다른 모듈이 보고서에 딸린 데이터를 보여주기 전에 소유권을 확인할 때 쓴다. */
-    @Transactional(readOnly = true)
-    public void assertOwnedBy(Integer reportId, String userId) {
-        findOwnedReport(reportId, userId);
-    }
-
-    @Transactional(readOnly = true)
-    public String getOwnedReportContent(Integer reportId, String userId) {
-        return findOwnedReport(reportId, userId).getContent();
     }
 
     private Report findOwnedReport(Integer reportId, String userId) {

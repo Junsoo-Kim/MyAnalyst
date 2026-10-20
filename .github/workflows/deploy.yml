@@ -34,10 +34,10 @@ jobs:
         working-directory: ./BE
         run: ./mvnw test
 
-      - name: Build edge and identity services (api-gateway, auth-service, user-service)
+      - name: Build Java services (gateway, identity, report-attached features)
         working-directory: ./services
         run: |
-          for svc in api-gateway auth-service user-service; do
+          for svc in api-gateway auth-service user-service notification-service dictionary-service chat-service; do
             (cd "$svc" && chmod +x mvnw && ./mvnw -B -q verify)
           done
 
@@ -97,6 +97,18 @@ jobs:
             context: ./services/user-service
             dockerfile: ./services/user-service/Dockerfile
             container: user-service
+          - name: notification-service
+            context: ./services/notification-service
+            dockerfile: ./services/notification-service/Dockerfile
+            container: notification-service
+          - name: dictionary-service
+            context: ./services/dictionary-service
+            dockerfile: ./services/dictionary-service/Dockerfile
+            container: dictionary-service
+          - name: chat-service
+            context: ./services/chat-service
+            dockerfile: ./services/chat-service/Dockerfile
+            container: chat-service
           - name: knowledge
             context: ./services
             dockerfile: ./services/knowledge/Dockerfile

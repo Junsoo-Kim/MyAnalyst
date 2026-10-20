@@ -14,6 +14,7 @@ import java.util.UUID;
 @Jacksonized // Kafka 메시지(ReportJobStatusChanged)에서 역직렬화할 수 있도록 빌더를 Jackson에 연결한다.
 public class ReportJobResponseDto {
     UUID jobId;
+    String userId; // notification-service가 SSE 구독자에게 자기 Job만 보내도록 소유자를 싣는다.
     String traceId;
     ReportJobStatus status;
     int progress;
@@ -27,6 +28,7 @@ public class ReportJobResponseDto {
     public static ReportJobResponseDto from(ReportJob job) {
         return ReportJobResponseDto.builder()
                 .jobId(job.getJobId())
+                .userId(job.getUserId())
                 .traceId(job.getTraceId())
                 .status(job.getStatus())
                 .progress(job.getProgress())

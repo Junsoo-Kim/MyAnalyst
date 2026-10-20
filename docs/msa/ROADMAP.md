@@ -11,19 +11,22 @@
 | 2 | 모듈 간 이벤트를 Kafka로(@Externalized, DLT, 리스너 백그라운드 시작) | 완료 | [stage2](stage2/README.md) |
 | 3 | rag_server → Python 서비스 분리, 보고서 생성을 Kafka 워커로 | 완료 | [stage3](stage3/README.md) |
 | 4 | api-gateway + auth-service + user-service, 세션 → JWT | 완료 | [stage4](stage4/README.md) |
-| 5 | 이벤트 소비 서비스 분리: notification, dictionary, chat | **다음** | – |
-| 6 | 핵심 분리: report, generation → BE 모놀리스 소멸, 서비스별 DB | 대기 | – |
+| 5 | 이벤트 소비 서비스 분리: notification, dictionary, chat | 완료 | [stage5](stage5/README.md) |
+| 6 | 핵심 분리: report, generation → BE 모놀리스 소멸, 서비스별 DB | **다음** | – |
 | 7 | 인프라: Terraform(ECS 서비스, Kafka EC2, Service Connect), 모니터링 | 대기 | – |
 
-## 2. 현재 구조 (4단계 완료 시점)
+## 2. 현재 구조 (5단계 완료 시점)
 
 ```
 브라우저 ──▶ api-gateway :8080 ── JWT(RS256) 검증, X-User-Id 재작성, CORS, 로그인 rate limit
               ├─ /sessions, /auth/** ──▶ auth-service ──(내부 API)──▶ user-service
               ├─ POST /users ─────────▶ user-service
+              ├─ GET /report-jobs/*/events ──▶ notification-service ◀─ job.status-changed
+              ├─ GET /reports/*/dictionary ──▶ dictionary-service   ◀─ report.created
+              ├─ /chat, /chat/stt, GET /reports/*/chat ▶ chat-service ◀─ report.created, HTTP ▶ qa, stt
               └─ /** ──────────────────▶ BE (Spring Modulith 모놀리스)
-                                          ├─ report, generation, dictionary, chat, notification, marketdata 모듈
-                                          ├─ HTTP ▶ market-data, qa, stt
+                                          ├─ report, generation, marketdata 모듈
+                                          ├─ HTTP ▶ market-data
                                           └─ Kafka ◀▶ generation-worker ──HTTP▶ knowledge ── Milvus, OpenSearch
 ```
 
@@ -32,7 +35,10 @@
 | api-gateway | `services/api-gateway` | Java, Spring Cloud Gateway 2024.0.2 | 8080 (호스트 공개는 이것 하나) | Redis(rate limit) |
 | auth-service | `services/auth-service` | Java | 8080 | Redis(refresh token 해시), 볼륨(JWT 서명 키) |
 | user-service | `services/user-service` | Java | 8080 | Users 테이블(공용 DB) |
-| BE | `BE/` | Java, Spring Boot 3.4.5, Modulith 1.3.12 | 8080 | 나머지 테이블(공용 DB), event_publication |
+| notification-service | `services/notification-service` | Java | 8080 | 없음(Job별 마지막 상태, 메모리) |
+| dictionary-service | `services/dictionary-service` | Java | 8080 | dictionary, dictionary_reports(사본: reportId → userId) |
+| chat-service | `services/chat-service` | Java | 8080 | chats, chat_reports(사본: reportId → userId, 본문) |
+| BE | `BE/` | Java, Spring Boot 3.4.5, Modulith 1.3.12 | 8080 | reports, report_jobs, report_job_attempt(공용 DB), event_publication |
 | knowledge / knowledge-ingest | `services/knowledge` | Python, FastAPI | 8000 | Milvus, OpenSearch |
 | generation-worker | `services/generation-worker` | Python | 9100(metrics) | 섹션 체크포인트(SQLite, 볼륨) |
 | market-data / qa / stt | `services/{market-data,qa,stt}` | Python, FastAPI | 8000 | 없음 |
@@ -44,12 +50,12 @@
 |---|---|---|---|---|
 | `generation.requested` | jobId | BE generation | `generation-worker` | 생성 입력 전부 + attempt |
 | `generation.progressed` / `.completed` / `.failed` | jobId | generation-worker | `generation-tracker`(BE) | 계약: `contracts/*.json` |
-| `job.status-changed` | jobId | BE generation | `notification-<uuid>`(인스턴스별) | SSE 전달용 |
-| `report.created` | reportId | BE report | `dictionary` | compacted |
-| `report.deleted` | reportId | BE report | `dictionary`, `chat` | |
+| `job.status-changed` | jobId | BE generation | `notification-<uuid>`(인스턴스별, latest) | SSE 전달용, `job.userId` 포함 |
+| `report.created` | reportId | BE report | `dictionary`, `chat` | compacted. `ReportCreated`와 `ReportDeleted`가 같은 key로 섞여 온다(`event-type` 헤더로 구분) |
 | `knowledge.indexed` | index | knowledge-ingest | (없음) | 1파티션 |
 
-- 토픽은 **발행하는 쪽이 생성**한다(브로커 자동 생성 꺼짐). 소비 실패용 DLT는 소비하는 쪽이 만든다.
+- 토픽은 **발행하는 쪽이 생성**한다(브로커 자동 생성 꺼짐). 소비 실패용 DLT는 소비하는 쪽이 만든다. 단, 5단계 서비스(dictionary, chat)가 쓰는 `report.created.DLT`는 BE가 만들어 둔다.
+- 5단계 소비자는 값을 JSON 바이트로 받아 필요한 필드만 읽고 `__TypeId__`는 무시한다. 계약 예시는 `contracts/report.created.v1.json`, `report.deleted.v1.json`, `job.status-changed.v1.json`.
 - 헤더 `event-type`, `event-version`(현재 1). 메시지는 JSON(camelCase).
 - 모든 소비자는 멱등이어야 한다(최소 한 번 전달). 생성 Job의 상태 전이는 "현재 상태 + attempt 번호"로 판정한다.
 
@@ -71,7 +77,7 @@
 |---|---|---|
 | D1 | 5 | **소유권 확인은 이벤트로 받은 사본으로 한다.** 이벤트에 `userId`를 싣고 각 서비스가 자기 데이터로 판단한다. 요청마다 report에 묻는 동기 호출은 두지 않는다. `ReportJobStatusChanged`가 싣는 `ReportJobResponseDto`에 `userId`를 추가한다(`ReportCreated`에는 이미 있다). |
 | D2 | 5 | **chat-service는 `ReportCreated.content`로 보고서 본문 사본을 보관한다.** 필드 추가는 하위 호환이므로 `event-version`은 1을 유지한다. |
-| D3 | 5 | **삭제는 `ReportDeleted`를 같은 key(reportId)로 `report.created` 토픽에도 발행한다.** compaction 후 key별 마지막 이벤트가 삭제로 남아 재생 시 삭제 상태가 유지된다. Modulith Outbox를 그대로 쓴다(null tombstone은 쓰지 않는다). `report.created` 소비자는 `event-type` 헤더로 생성/삭제를 구분해 처리한다. 기존 `report.deleted` 토픽은 다른 소비자를 위해 유지할지 정리할지 구현 시 판단한다. |
+| D3 | 5 | **삭제는 `ReportDeleted`를 같은 key(reportId)로 `report.created` 토픽에 발행한다**(구현: `report.deleted` 토픽은 없앴다). compaction 후 key별 마지막 이벤트가 삭제로 남아 재생 시 삭제 상태가 유지된다. Modulith Outbox를 그대로 쓴다(null tombstone은 쓰지 않는다). `report.created` 소비자는 `event-type` 헤더로 생성/삭제를 구분해 처리한다. 기존 `report.deleted` 토픽은 다른 소비자를 위해 유지할지 정리할지 구현 시 판단한다. |
 | D4 | 5 | **5단계는 공용 PostgreSQL을 계속 쓴다.** 테이블 소유만 서비스별로 나눈다. 물리 분리는 6단계에서 한다. |
 | D5 | 6 | **생성 완료 → 보고서 저장은 명령 토픽 `report.save-requested`로 비동기 처리한다(Saga, 오케스트레이션).** generation-service가 발행하고 report-service가 저장한 뒤 `report.created`(generationJobId 포함)를 발행하면, generation-service가 Job을 SUCCEEDED로 바꾼다. 저장은 `generationJobId` unique로 멱등이다. |
 | D6 | 6 | **같은 PostgreSQL 인스턴스 안에 서비스별 database를 둔다**(user_db, report_db, generation_db, chat_db, dictionary_db). 스키마는 지금처럼 `ddl-auto`에 맡기고, 기존 데이터 이전은 일회성 SQL 스크립트로 한다(Flyway는 도입하지 않는다). |
@@ -79,31 +85,16 @@
 | D8 | 7 | **Terraform은 `validate`·`plan`까지만 실행한다(`apply` 하지 않음).** 문서 표기는 §3 규칙을 따른다. |
 | D9 | 7 | **비밀 값과 JWT 서명 키(JWK)는 Secrets Manager에 두고 환경 변수로 주입한다.** auth-service는 `JWT_KEY_FILE` 대신 JWK 문자열을 받는 경로를 추가한다. |
 | D10 | 7 | **서비스 간 인증은 공유 비밀(`X-Internal-Token`)을 유지한다.** mTLS는 알려진 공백으로 문서에 남긴다. |
-| D11 | 5~6 | **이월 공백 중 두 가지를 함께 처리한다.** (1) `ask_llm`이 OpenAI 오류를 예외로 올리게 바꿔 실패한 생성이 재시도되게 한다. (2) Kafka 메시지에서 Spring `__TypeId__` 헤더를 없앤다. |
+| D11 | 6 | **이월 공백 중 두 가지를 함께 처리한다.** (1) `ask_llm`이 OpenAI 오류를 예외로 올리게 바꿔 실패한 생성이 재시도되게 한다. (2) Kafka 메시지에서 Spring `__TypeId__` 헤더를 없앤다. |
 
 ## 5. 남은 단계
 
-### 5단계 — notification, dictionary, chat 분리
+### 5단계 — 완료
 
-BE의 해당 모듈을 서비스로 옮긴다. 이미 Kafka로만 연결되어 있으므로 **코드 이동이 중심**이다.
-
-| 새 서비스 | BE에서 옮길 것 | 데이터 | Gateway 경로 |
-|---|---|---|---|
-| notification-service | `notification` 모듈(SSE emitter, `job.status-changed` 소비) | 없음 | `GET /report-jobs/*/events` |
-| dictionary-service | `dictionary` 모듈(`report.created`/`report.deleted` 소비, 조회 API) | Dictionary 테이블 | `GET /reports/*/dictionary` |
-| chat-service | `chat` 모듈(qa·stt 호출, 기록 저장, `report.deleted` 소비) | Chats 테이블 + **보고서 본문 사본** | `POST /chat`, `POST /chat/stt`, `GET /reports/*/chat` |
-
-할 일:
-- **소유권 확인(D1).** 지금 세 모듈은 `ReportService.assertOwnedBy/getOwnedReportContent`(BE 내부 호출)를 쓴다. 이것을 각 서비스가 이벤트로 받은 사본(reportId → userId)으로 판단하게 바꾼다.
-  - dictionary·chat-service: `report.created`에서 `userId`를 저장해 둔다.
-  - notification-service: `job.status-changed`의 `userId`로 SSE 구독 요청자를 확인한다. 구독 시점의 현재 상태는 BE generation의 기존 조회 API(`GET /report-jobs/{id}`)를 Gateway 경유로 FE가 이미 따로 부르므로, notification은 구독 이후의 변경만 보내도 된다. 구독 직후 스냅샷이 필요하면 마지막으로 받은 이벤트를 메모리에 보관했다가 보낸다.
-- **보고서 본문 사본(D2).** `ReportCreated`에 `content`를 추가한다. 이벤트 레지스트리 `serialized_event`는 TEXT라 크기 제한은 없다.
-- **삭제 재생(D3).** `ReportDeleted`를 `report.created`에도 같은 key로 내보낸다. Modulith 외부 발행 설정에서 한 이벤트를 두 토픽으로 보낼 수 없으면, 소비자가 `report.created` 한 토픽만 읽도록 정리하는 방안을 우선 검토한다.
-- **재생 실험(이 단계의 핵심 증거).** chat-service DB를 비우고 consumer group offset을 `report.created` 처음으로 되돌려, 사본이 다시 만들어지는지 기록한다(건수, 소요 시간, 삭제된 보고서가 되살아나지 않는지).
-- notification-service는 인스턴스마다 고유 consumer group(`latest`)을 그대로 유지한다. Gateway의 SSE 경로가 notification으로 가도록 라우트를 BE보다 앞에 둔다.
-- 서비스별 내부 토큰 검사(`X-Internal-Token`)와 `X-User-Id` 사용은 user/auth-service와 같은 방식으로 한다.
-- DB는 공용 PostgreSQL을 계속 쓴다(D4). FK는 1단계에서 이미 제거됐다.
-- D11의 두 항목도 이 단계에서 처리해도 된다(6단계로 미뤄도 된다).
+[stage5/README.md](stage5/README.md) 참고. 6단계가 이어받을 것:
+- dictionary·chat-service의 보고서 사본은 `report.created`로 만든다. 6단계에서 report-service가 발행자가 되어도 토픽·key·헤더(`event-type`)·필드는 그대로 유지한다.
+- `scripts/migrate/stage5_report_copies.sql`은 공용 DB에서만 동작한다. 서비스별 DB로 나누기 전에 실행한다.
+- `ReportJobResponseDto.userId`는 notification-service가 필터링에 쓴다. generation-service로 옮길 때 빼지 않는다.
 
 ### 6단계 — report, generation 분리와 서비스별 DB
 
@@ -130,10 +121,9 @@ BE의 해당 모듈을 서비스로 옮긴다. 이미 Kafka로만 연결되어 �
 
 | 출처 | 내용 | 다룰 단계 |
 |---|---|---|
-| 2 | `report.created` 재생 시 삭제된 보고서가 되살아남 | 5 (D3) |
-| 2 | 메시지에 Spring `__TypeId__` 헤더(Java 클래스명)가 붙음 | 5~6 (D11) |
+| 2 | 메시지에 Spring `__TypeId__` 헤더(Java 클래스명)가 붙음(5단계 소비자는 무시) | 6 (D11) |
 | 2 | compose의 Kafka에 볼륨이 없어 `down` 시 데이터 소실 | 필요 시 |
-| 3 | `ask_llm`이 OpenAI 오류를 예외 대신 문자열로 반환 → LLM 장애 중 오류 문구가 담긴 보고서가 성공으로 저장될 수 있음 | 5~6 (D11) |
+| 3 | `ask_llm`이 OpenAI 오류를 예외 대신 문자열로 반환 → LLM 장애 중 오류 문구가 담긴 보고서가 성공으로 저장될 수 있음 | 6 (D11) |
 | 3 | 진행/완료/실패가 서로 다른 토픽이라 토픽 간 순서 비보장(실패가 STARTED보다 먼저 오면 lease 만료까지 대기) | 6 |
 | 3 | 워커는 취소된 Job을 모르고 끝까지 생성함 | 6 |
 | 3 | 뉴스 크롤러가 현재 네이버 HTML과 맞지 않음 | 아무 때나 |
@@ -141,6 +131,10 @@ BE의 해당 모듈을 서비스로 옮긴다. 이미 Kafka로만 연결되어 �
 | 4 | Gateway와 auth-service가 동시에 재시작되면 JWKS를 받지 못해 모든 토큰 거부(미검증) | 7 |
 | 4 | refresh token 재사용 감지 시 토큰 패밀리 폐기 없음 | 필요 시 |
 | 4 | 서비스 간 인증이 공유 비밀(`X-Internal-Token`) 수준 | 7(mTLS 등) |
+| 5 | 보고서 사본은 최종 일관성(저장 직후 10~70ms 동안 사전·채팅 404 가능, 재시도 없음) | 필요 시 |
+| 5 | SSE 구독은 없는/남의 Job이어도 열림(정보는 안 새지만 연결이 남음) | 6(generation-service가 Job 소유자 사본 제공 등) |
+| 5 | qa의 400을 chat-service가 500으로 응답(기존 동작) | 아무 때나 |
+| 5 | 새 Java 소비자에 계약 테스트 없음 | 필요 시 |
 
 ## 7. 검증 환경 메모
 
@@ -156,6 +150,7 @@ BE의 해당 모듈을 서비스로 옮긴다. 이미 Kafka로만 연결되어 �
   docker compose run --rm knowledge-ingest python ingest.py rebuild-milvus --create-dummy news_embeddings 40
   docker compose run --rm knowledge-ingest          # BM25 색인 + knowledge.indexed 발행
   ```
+- **RAG 스택 없이 보고서 만들기(5단계).** `scripts/verify/stage5_flow.py`가 워커 대신 `generation.progressed/completed`를 브로커에 넣는다. `flow`(소유권·SSE·삭제), `bulk N D`(보고서 N개 생성, D개 삭제), `replay`(chat 사본 재생). 띄울 서비스: `postgres redis kafka be api-gateway auth-service user-service notification-service dictionary-service chat-service qa stt`.
 - **긴 작업 비교 실험.** `scripts/verify/naive_consumer.py`는 poll 루프 안에서 동기 처리하는 기준 소비자다(3단계 E4a). 워커 이미지 안에서 실행한다.
 - compose 프로젝트 이름을 단계별로 따로 쓰면(`-p myanalyst-sN`) 볼륨이 분리된다. 끝나면 `down -v`로 정리한다. `container_name`이 고정이라 두 프로젝트를 동시에 띄울 수는 없다.
 - MinIO는 Docker Hub 이미지가 사라져 Chainguard 이미지를 digest로 고정해 쓴다(root로 실행).

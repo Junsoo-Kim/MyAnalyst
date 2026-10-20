@@ -1,7 +1,6 @@
 package khu_swcon.myanalyst.report.internal;
 
 import khu_swcon.myanalyst.report.ReportCreated;
-import khu_swcon.myanalyst.report.ReportDeleted;
 import khu_swcon.myanalyst.shared.kafka.KafkaTopics;
 import org.apache.kafka.common.config.TopicConfig;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,8 +24,6 @@ public class ReportKafkaTopics {
         return new KafkaAdmin.NewTopics(
                 KafkaTopics.topic(ReportCreated.TOPIC, partitions, replicas,
                         Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)),
-                KafkaTopics.deadLetterTopic(ReportCreated.TOPIC, partitions, replicas),
-                KafkaTopics.topic(ReportDeleted.TOPIC, partitions, replicas, Map.of()),
-                KafkaTopics.deadLetterTopic(ReportDeleted.TOPIC, partitions, replicas));
+                KafkaTopics.deadLetterTopic(ReportCreated.TOPIC, partitions, replicas));
     }
 }

@@ -1,0 +1,14 @@
+== E7 one-time reconciliation (scripts/migrate/stage5_report_copies.sql)
+   before: legacy report 6 (saved without an event) dictionary -> 404 , chat history -> 404
+   before: orphan copies for deleted report 900001 (chat_reports, dictionary_reports, chats): 1|1|1
+   run 1: BEGIN INSERT 0 1 INSERT 0 1 DELETE 0 DELETE 1 DELETE 1 DELETE 1 COMMIT 
+   run 2: BEGIN INSERT 0 0 INSERT 0 0 DELETE 0 DELETE 0 DELETE 0 DELETE 0 COMMIT 
+   after: legacy report 6 dictionary -> (200, []) , chat history -> 200
+   after: orphan copies: 0|0|0
+
+== E8 replay: rebuild chat-service report copies from report.created (200 reports created, 20 deleted beforehand)
+   before         reports|published reports|chat_reports|copies of deleted reports|chats: 183|182|182|0|2
+   after truncate reports|published reports|chat_reports|copies of deleted reports|chats: 183|182|0|0|2
+   offsets reset to earliest: [(0, 62), (0, 70), (0, 96)] (current, end) per partition
+   replayed 228 messages (ReportCreated + ReportDeleted); consumer caught up 7.7s after container start; JVM start line: ChatServiceApplication in 4.662 seconds (process running for 5.013)
+   after replay   reports|published reports|chat_reports|copies of deleted reports|chats: 183|182|182|0|2
