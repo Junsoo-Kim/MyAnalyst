@@ -61,8 +61,27 @@
 - 커밋은 단계(또는 의미 있는 하위 단위)마다 한다. 메시지는 한국어로, 무엇을 왜 바꿨는지와 검증 결과를 적는다.
 - 서비스 간 계약을 바꿀 때는 `contracts/*.json`을 먼저 고친다. BE `GenerationMessageContractTest`와 워커 `test_message_contract.py`가 같은 파일을 읽는다.
 - 모듈/서비스 경계를 넘는 호출은 공개 API나 이벤트로만 한다. BE 안에서는 `ModularityTests`가 강제한다.
+- **배포 상태는 문서에 쓰지 않는다.** README·아키텍처 문서에는 AWS 구성(리소스와 연결 관계)만 그린다. "배포했다/운영 중"이나 "계획만 했다" 같은 상태 서술, 실제 배포를 전제로 한 수치(트래픽·비용·가용성)는 넣지 않는다.
 
-## 4. 남은 단계
+## 4. 확정된 결정
+
+아래는 정해진 사항이다. 다음 단계에서는 이 결정을 따른다.
+
+| # | 단계 | 결정 |
+|---|---|---|
+| D1 | 5 | **소유권 확인은 이벤트로 받은 사본으로 한다.** 이벤트에 `userId`를 싣고 각 서비스가 자기 데이터로 판단한다. 요청마다 report에 묻는 동기 호출은 두지 않는다. `ReportJobStatusChanged`가 싣는 `ReportJobResponseDto`에 `userId`를 추가한다(`ReportCreated`에는 이미 있다). |
+| D2 | 5 | **chat-service는 `ReportCreated.content`로 보고서 본문 사본을 보관한다.** 필드 추가는 하위 호환이므로 `event-version`은 1을 유지한다. |
+| D3 | 5 | **삭제는 `ReportDeleted`를 같은 key(reportId)로 `report.created` 토픽에도 발행한다.** compaction 후 key별 마지막 이벤트가 삭제로 남아 재생 시 삭제 상태가 유지된다. Modulith Outbox를 그대로 쓴다(null tombstone은 쓰지 않는다). `report.created` 소비자는 `event-type` 헤더로 생성/삭제를 구분해 처리한다. 기존 `report.deleted` 토픽은 다른 소비자를 위해 유지할지 정리할지 구현 시 판단한다. |
+| D4 | 5 | **5단계는 공용 PostgreSQL을 계속 쓴다.** 테이블 소유만 서비스별로 나눈다. 물리 분리는 6단계에서 한다. |
+| D5 | 6 | **생성 완료 → 보고서 저장은 명령 토픽 `report.save-requested`로 비동기 처리한다(Saga, 오케스트레이션).** generation-service가 발행하고 report-service가 저장한 뒤 `report.created`(generationJobId 포함)를 발행하면, generation-service가 Job을 SUCCEEDED로 바꾼다. 저장은 `generationJobId` unique로 멱등이다. |
+| D6 | 6 | **같은 PostgreSQL 인스턴스 안에 서비스별 database를 둔다**(user_db, report_db, generation_db, chat_db, dictionary_db). 스키마는 지금처럼 `ddl-auto`에 맡기고, 기존 데이터 이전은 일회성 SQL 스크립트로 한다(Flyway는 도입하지 않는다). |
+| D7 | 6 | **BE가 사라지면 Spring Modulith와 `ModularityTests`도 제거한다.** 각 Java 서비스는 Outbox가 필요하면 Modulith 이벤트 레지스트리(JDBC)만 쓴다. |
+| D8 | 7 | **Terraform은 `validate`·`plan`까지만 실행한다(`apply` 하지 않음).** 문서 표기는 §3 규칙을 따른다. |
+| D9 | 7 | **비밀 값과 JWT 서명 키(JWK)는 Secrets Manager에 두고 환경 변수로 주입한다.** auth-service는 `JWT_KEY_FILE` 대신 JWK 문자열을 받는 경로를 추가한다. |
+| D10 | 7 | **서비스 간 인증은 공유 비밀(`X-Internal-Token`)을 유지한다.** mTLS는 알려진 공백으로 문서에 남긴다. |
+| D11 | 5~6 | **이월 공백 중 두 가지를 함께 처리한다.** (1) `ask_llm`이 OpenAI 오류를 예외로 올리게 바꿔 실패한 생성이 재시도되게 한다. (2) Kafka 메시지에서 Spring `__TypeId__` 헤더를 없앤다. |
+
+## 5. 남은 단계
 
 ### 5단계 — notification, dictionary, chat 분리
 
@@ -74,42 +93,47 @@ BE의 해당 모듈을 서비스로 옮긴다. 이미 Kafka로만 연결되어 �
 | dictionary-service | `dictionary` 모듈(`report.created`/`report.deleted` 소비, 조회 API) | Dictionary 테이블 | `GET /reports/*/dictionary` |
 | chat-service | `chat` 모듈(qa·stt 호출, 기록 저장, `report.deleted` 소비) | Chats 테이블 + **보고서 본문 사본** | `POST /chat`, `POST /chat/stt`, `GET /reports/*/chat` |
 
-정해야 할 것과 할 일:
-- **소유권 확인.** 지금은 세 모듈 모두 `ReportService.assertOwnedBy/getOwnedReportContent`(BE 내부 호출)를 쓴다. 서비스로 나가면 둘 중 하나를 고른다.
-  - (권장) 이벤트에 `userId`를 싣고 각 서비스가 자기 사본으로 판단한다. `ReportCreated`에는 이미 `userId`가 있다. `ReportJobStatusChanged`(→ `ReportJobResponseDto`)에는 `userId`가 없어 추가해야 한다.
-  - 또는 BE/report-service에 소유권 확인 내부 API를 둔다(동기 의존이 생긴다).
-- **chat-service의 보고서 본문.** 질문마다 BE를 부르지 않도록 `report.created`로 본문 사본을 보관한다. 지금 `ReportCreated`에는 본문이 없으므로 `content` 필드를 추가하고(`event-version` 판단 필요), 이벤트 레지스트리 `serialized_event`(TEXT) 크기도 고려한다.
-- **재생 실험(이 단계의 핵심 증거).** chat-service DB를 비우고 consumer group offset을 `report.created` 처음으로 되돌려, 사본이 다시 만들어지는지(건수·소요 시간)를 기록한다.
-- **2단계 공백 해결.** `report.created`를 처음부터 다시 읽으면 삭제된 보고서도 되살아난다. 삭제를 같은 key의 tombstone(null value)으로 `report.created`에 남기거나, 소비자가 `report.deleted`를 함께 반영하는 방식을 정한다. Modulith `@Externalized`는 null payload를 보낼 수 없으므로 tombstone은 별도 경로가 필요하다.
+할 일:
+- **소유권 확인(D1).** 지금 세 모듈은 `ReportService.assertOwnedBy/getOwnedReportContent`(BE 내부 호출)를 쓴다. 이것을 각 서비스가 이벤트로 받은 사본(reportId → userId)으로 판단하게 바꾼다.
+  - dictionary·chat-service: `report.created`에서 `userId`를 저장해 둔다.
+  - notification-service: `job.status-changed`의 `userId`로 SSE 구독 요청자를 확인한다. 구독 시점의 현재 상태는 BE generation의 기존 조회 API(`GET /report-jobs/{id}`)를 Gateway 경유로 FE가 이미 따로 부르므로, notification은 구독 이후의 변경만 보내도 된다. 구독 직후 스냅샷이 필요하면 마지막으로 받은 이벤트를 메모리에 보관했다가 보낸다.
+- **보고서 본문 사본(D2).** `ReportCreated`에 `content`를 추가한다. 이벤트 레지스트리 `serialized_event`는 TEXT라 크기 제한은 없다.
+- **삭제 재생(D3).** `ReportDeleted`를 `report.created`에도 같은 key로 내보낸다. Modulith 외부 발행 설정에서 한 이벤트를 두 토픽으로 보낼 수 없으면, 소비자가 `report.created` 한 토픽만 읽도록 정리하는 방안을 우선 검토한다.
+- **재생 실험(이 단계의 핵심 증거).** chat-service DB를 비우고 consumer group offset을 `report.created` 처음으로 되돌려, 사본이 다시 만들어지는지 기록한다(건수, 소요 시간, 삭제된 보고서가 되살아나지 않는지).
 - notification-service는 인스턴스마다 고유 consumer group(`latest`)을 그대로 유지한다. Gateway의 SSE 경로가 notification으로 가도록 라우트를 BE보다 앞에 둔다.
 - 서비스별 내부 토큰 검사(`X-Internal-Token`)와 `X-User-Id` 사용은 user/auth-service와 같은 방식으로 한다.
-- 이 단계의 DB는 공용 PostgreSQL을 계속 쓰되, 테이블 소유를 서비스별로 분명히 한다(FK는 1단계에서 이미 제거됨).
+- DB는 공용 PostgreSQL을 계속 쓴다(D4). FK는 1단계에서 이미 제거됐다.
+- D11의 두 항목도 이 단계에서 처리해도 된다(6단계로 미뤄도 된다).
 
 ### 6단계 — report, generation 분리와 서비스별 DB
 
-- BE에 남는 report·generation 모듈을 report-service, generation-service로 옮긴다. BE 디렉터리는 사라진다(Modulith는 서비스 내부 구조 정리용으로만 남거나 제거).
-- **생성 완료 흐름.** 지금은 generation 모듈이 `ReportService.saveGeneratedReport`를 직접 부른다. 서비스로 나가면 Saga로 바꾼다: generation-service가 `generation.completed`를 받으면 report-service에 저장을 요청하고(명령 토픽 또는 내부 API), report-service가 `report.created`(generationJobId 포함)를 발행하면 generation-service가 Job을 SUCCEEDED로 바꾼다. report 저장은 `generationJobId` unique로 이미 멱등이다.
-- **서비스별 database**(같은 RDS 인스턴스 안): user_db, report_db, generation_db, chat_db, dictionary_db. 기존 공용 DB에서 옮기는 마이그레이션 스크립트와 순서(쓰기 중지 → 복사 → 전환)를 정한다. `ModuleBoundaryMigration`(BE)은 이 시점에 제거할 수 있다.
-- 각 서비스가 자기 `event_publication`(Outbox)을 가진다(Modulith를 쓰는 Java 서비스).
+- BE에 남는 report·generation(+ marketdata 프록시) 모듈을 report-service, generation-service로 옮긴다. marketdata 프록시는 Gateway가 market-data 서비스로 직접 라우팅하도록 바꾸고 BE 쪽 코드는 없앤다(Redis 캐시가 필요하면 market-data 서비스로 옮긴다). BE 디렉터리는 사라진다.
+- **생성 완료 흐름(D5).** generation-service가 `generation.completed`를 받으면 `report.save-requested`(jobId, userId, 보고서 입력, 본문, 용어)를 발행한다. report-service가 저장 후 `report.created`를 발행하고, generation-service가 그것을 받아 Job을 SUCCEEDED로 바꾼다. 새 토픽과 메시지는 `contracts/`에 먼저 추가한다.
+- **서비스별 database(D6).** user_db, report_db, generation_db, chat_db, dictionary_db. 공용 DB에서 옮기는 일회성 SQL 스크립트를 `scripts/`에 두고 순서(쓰기 중지 → 복사 → 전환)를 문서에 남긴다. `ModuleBoundaryMigration`은 이 시점에 제거한다.
+- 각 Java 서비스가 필요하면 자기 `event_publication`(Modulith JDBC 레지스트리)을 가진다. Modulith 모듈 검증과 `ModularityTests`는 제거한다(D7).
 - Gateway 라우트를 서비스별로 나누고 catch-all(`/** → BE`)을 없앤다.
+- 3단계 공백 중 "토픽 간 순서"와 "취소된 Job"은 generation-service로 옮기면서 다룬다.
 
 ### 7단계 — 인프라
 
 - `infra/envs/prod/main.tf`는 아직 `be`, `rag-server` 두 ECS 서비스 기준이다. 서비스별 ECS 서비스(`modules/ecs-service` 재사용), ALB → api-gateway만 노출, 나머지는 Service Connect로 연결한다.
 - Kafka: EC2 단일 KRaft 브로커 모듈(`modules/milvus-ec2` 패턴 재사용). 환경 변수 `KAFKA_BOOTSTRAP_SERVERS`를 모든 소비·발행 서비스에 주입한다.
-- 비밀: `INTERNAL_GATEWAY_TOKEN`, OpenAI 키, DB 비밀번호는 Secrets Manager로 관리한다. auth-service 서명 키는 영속 볼륨(EFS) 또는 Secrets Manager에 둔다.
+- 비밀(D9): `INTERNAL_GATEWAY_TOKEN`, OpenAI 키, DB 비밀번호, auth-service JWK를 Secrets Manager로 관리하고 ECS 태스크 정의의 `secrets`로 주입한다.
+- 서비스 간 인증은 공유 비밀 유지(D10).
 - 제거: `RAG_SERVER_URL` 등 rag-server 시절 설정.
 - 모니터링: consumer lag(Kafka exporter + Prometheus), worker 지표(`worker_jobs_total`, `worker_rebalances_total`), DLT 적재량(`kafka.consumer.dead_lettered`).
-- CI(`.github/workflows/deploy.yml`)의 이미지 매트릭스는 이미 새 서비스를 포함한다. ECS 서비스가 생기면 배포 단계가 동작한다.
+- 검증은 `terraform fmt -check`, `terraform validate`, `terraform plan`(자격 증명이 있을 때)까지 한다. `apply`는 하지 않는다(D8).
+- `infra/README.md`와 루트 `README.md`의 아키텍처 그림·구성 설명을 새 구조로 고친다. 배포 상태 서술은 넣지 않는다(§3 마지막 규칙).
+- CI(`.github/workflows/deploy.yml`)의 이미지 매트릭스는 이미 새 서비스를 포함한다.
 
-## 5. 이월된 공백 (단계 기록에서 모음)
+## 6. 이월된 공백 (단계 기록에서 모음)
 
 | 출처 | 내용 | 다룰 단계 |
 |---|---|---|
-| 2 | `report.created` 재생 시 삭제된 보고서가 되살아남(tombstone 없음) | 5 |
-| 2 | 메시지에 Spring `__TypeId__` 헤더(Java 클래스명)가 붙음. 소비자는 의존하지 않지만 언어 중립 계약을 위해 제거 검토 | 5~6 |
+| 2 | `report.created` 재생 시 삭제된 보고서가 되살아남 | 5 (D3) |
+| 2 | 메시지에 Spring `__TypeId__` 헤더(Java 클래스명)가 붙음 | 5~6 (D11) |
 | 2 | compose의 Kafka에 볼륨이 없어 `down` 시 데이터 소실 | 필요 시 |
-| 3 | `ask_llm`이 OpenAI 오류를 예외 대신 문자열로 반환 → LLM 장애 중 오류 문구가 담긴 보고서가 성공으로 저장될 수 있음 | 아무 때나 |
+| 3 | `ask_llm`이 OpenAI 오류를 예외 대신 문자열로 반환 → LLM 장애 중 오류 문구가 담긴 보고서가 성공으로 저장될 수 있음 | 5~6 (D11) |
 | 3 | 진행/완료/실패가 서로 다른 토픽이라 토픽 간 순서 비보장(실패가 STARTED보다 먼저 오면 lease 만료까지 대기) | 6 |
 | 3 | 워커는 취소된 Job을 모르고 끝까지 생성함 | 6 |
 | 3 | 뉴스 크롤러가 현재 네이버 HTML과 맞지 않음 | 아무 때나 |
@@ -118,7 +142,7 @@ BE의 해당 모듈을 서비스로 옮긴다. 이미 Kafka로만 연결되어 �
 | 4 | refresh token 재사용 감지 시 토큰 패밀리 폐기 없음 | 필요 시 |
 | 4 | 서비스 간 인증이 공유 비밀(`X-Internal-Token`) 수준 | 7(mTLS 등) |
 
-## 6. 검증 환경 메모
+## 7. 검증 환경 메모
 
 - **LLM 없이 전체 파이프라인 돌리기.** `scripts/verify/openai_stub.py`는 OpenAI 호환 스텁이다(chat.completions, audio.transcriptions). 워커·qa·stt는 `OPENAI_BASE_URL`을 따르므로 이렇게 띄운다.
   ```
