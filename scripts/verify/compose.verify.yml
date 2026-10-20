@@ -1,0 +1,15 @@
+# Verification-only override: lets the LLM-using services reach the OpenAI-compatible stub on the host.
+#   python scripts/verify/openai_stub.py        (listens on :18001)
+#   OPENAI_API_KEY=stub OPENAI_BASE_URL=http://host.docker.internal:18001/v1 \
+#     docker compose -p myanalyst-verify -f docker-compose.yml -f scripts/verify/compose.verify.yml up -d
+services:
+  generation-worker:
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment:
+      # Long-job experiment: set aggressive values to compare with naive_consumer.py
+      KAFKA_MAX_POLL_INTERVAL_MS: ${VERIFY_MAX_POLL_INTERVAL_MS:-300000}
+      KAFKA_SESSION_TIMEOUT_MS: ${VERIFY_SESSION_TIMEOUT_MS:-45000}
+  qa:
+    extra_hosts: ["host.docker.internal:host-gateway"]
+  stt:
+    extra_hosts: ["host.docker.internal:host-gateway"]
