@@ -1,0 +1,14 @@
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+pymilvus>=2.4.0     # Use the version compatible with your Milvus server
+transformers>=4.30.0
+torch>=2.0.0        # CPU wheel is selected by the Dockerfile's extra index
+python-dotenv>=1.0.0
+numpy>=1.20.0
+protobuf>=3.20.0    # Often needed by pymilvus/grpcio
+grpcio<=1.67.1,>=1.49.1
+ujson>=2.0.0
+pandas>=1.2.4       # tools/ and evals/ read CSV sources
+prometheus-client>=0.19.0
+opensearch-py>=2.4.0
+confluent-kafka>=2.5.0,<3   # ingest publishes knowledge.indexed

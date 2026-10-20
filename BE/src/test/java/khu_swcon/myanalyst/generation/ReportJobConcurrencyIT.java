@@ -74,7 +74,7 @@ class ReportJobConcurrencyIT {
     }
 
     @Test
-    void twoWorkersClaimingTheSameJobConcurrentlyOnlyOneSucceeds() throws Exception {
+    void concurrentStartsOfTheSameAttemptStartItOnlyOnce() throws Exception {
         int workerCount = 10;
         ExecutorService pool = Executors.newFixedThreadPool(workerCount);
         CountDownLatch ready = new CountDownLatch(workerCount);
@@ -85,7 +85,8 @@ class ReportJobConcurrencyIT {
             submitted.add(pool.submit(() -> {
                 ready.countDown();
                 start.await();
-                return reportJobService.claimForTest(jobId);
+                // 같은 시도의 STARTED가 동시에 여러 번 도착한 상황(재전달·중복 워커)
+                return reportJobService.startAttemptForTest(jobId, 1);
             }));
         }
 

@@ -114,6 +114,9 @@ OpenSearch 기본(standard) 분석기는 한국어 조사를 못 뗀다("영업�
 **부수적으로 발견한, 이번 범위 밖의 버그**: `rebuild_milvus_collections.py`의 샘플 데이터
 생성이 `nlist` 파라미터 오류로 실패한다(코퍼스 크기 대비 부적절한 값). 실제 데이터 삽입
 전에 에러가 나서 컬렉션은 만들어지지만 비어 있다 — 이번 세션에서는 손대지 않았다.
+(2026-10-20 MSA 3단계에서 수정: 원인은 "코퍼스 크기 대비 부적절한 값"이 아니라, IVF_FLAT 빌드 파라미터에
+검색 파라미터 `nprobe`를 넣어 `nlist`가 비어 있던 것이었다. 삽입 후 flush 누락도 함께 고쳤다.
+파일은 `services/knowledge/tools/`로 옮겨졌다.)
 
 테스트는 rag_server 15개 → 30개(`test_hybrid_search.py` 6개, `test_openapi_contract.py`
 3개, `test_section_checkpoints.py` 5개 신설), BE는 `ReportJobConcurrencyIT` 1개 추가.
@@ -124,6 +127,8 @@ OpenSearch 기본(standard) 분석기는 한국어 조사를 못 뗀다("영업�
 > [docs/msa/stage1/README.md](docs/msa/stage1/README.md).
 > 같은 날 2단계(Kafka 도입)로 모듈 간 연결이 Kafka 토픽으로 바뀌었다. 아래 흐름의 이벤트는 모두 Kafka를 거친다.
 > 상세는 [docs/msa/stage2/README.md](docs/msa/stage2/README.md).
+> 3단계로 `rag_server`가 `services/` 아래 Python 서비스 5개(+공용 라이브러리)로 나뉘었고, 보고서 생성은 BE가 HTTP로
+> 기다리지 않고 generation-worker가 Kafka로 받아 처리한다. 상세는 [docs/msa/stage3/README.md](docs/msa/stage3/README.md).
 
 ```text
 React → POST /report-jobs (202)
@@ -174,9 +179,11 @@ cd MyAnalyst\BE
 cd ..\FE
 cmd.exe /d /c npm run build
 
-cd ..\rag_server
-python -m unittest discover -s tests -v
-python -m unittest discover -s evaluation\tests -v
+# MSA 3단계부터 rag_server는 services/ 아래 서비스로 나뉘었다. 서비스별로 각자 디렉터리에서 실행한다.
+cd ..\services
+pip install ".\python-common[web,llm]"
+foreach ($svc in "python-common","knowledge","generation-worker","market-data") { Push-Location $svc; python -m unittest discover -s tests -v; Pop-Location }
+cd knowledge; python -m unittest discover -s evaluation\tests -v
 ```
 
 `ReportJobServiceTest`는 Mockito로 idempotency, 생성 요청 이벤트 발행, 실패 시 재시도 예약, lease 만료 후 복구, 정상 dispatch 시 Report가 정확히 한 번만 생성되는지를 검증한다. 동시에 같은 Job을 두 워커가 claim할 때 비관적 락으로 하나만 성공하는지는 `ReportJobConcurrencyIT`(Testcontainers, 실제 PostgreSQL)가 검증한다. `ModularityTests`는 모듈 경계 위반·순환 의존을 검출한다.
@@ -185,10 +192,10 @@ python -m unittest discover -s evaluation\tests -v
 
 ## RAG 평가 실행
 
-`rag_server/evaluation/golden_dataset.example.jsonl`의 `REPLACE_WITH_MILVUS_ID`를 실제 검색 결과의 `collection:id`로 교체해 Golden Dataset을 만든다. 결과 ID는 서로 다른 collection 간 충돌을 막기 위해 항상 이 형식으로 기록한다.
+`services/knowledge/evaluation/golden_dataset.example.jsonl`의 `REPLACE_WITH_MILVUS_ID`를 실제 검색 결과의 `collection:id`로 교체해 Golden Dataset을 만든다. 결과 ID는 서로 다른 collection 간 충돌을 막기 위해 항상 이 형식으로 기록한다.
 
 ```powershell
-cd MyAnalyst\rag_server
+cd MyAnalyst\services\knowledge
 python -m unittest discover -s evaluation\tests -v
 python -m evaluation.evaluate_retrieval `
   --dataset evaluation\golden_dataset.jsonl `

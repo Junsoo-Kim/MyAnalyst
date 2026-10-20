@@ -1,0 +1,23 @@
+== [15:58:32] job=336cab46-c872-4549-8798-28226902c54b (LLM stub delay 1s, ~22s per report)
+-- [15:58:41] 진행 중: RUNNING attempts=1 progress=36 report_id=- msg=Generating section 4: 시장 환경 및 전략 방향
+== [15:58:41] worker SIGKILL
+   checkpoints kept: 2,3
+   BE 상태: RUNNING attempts=1 progress=36 report_id=- msg=Generating section 4: 시장 환경 및 전략 방향
+== [15:58:48] worker 재기동
+   SUCCEEDED at 15:59:42
+   SUCCEEDED attempts=1 progress=100 report_id=6 msg=Report generated
+   reports for job: 1, attempts recorded: 1
+   LLM calls after restart: 14 (full report = 22)
+-- progressed events for the job after restart:
+     STARTED    10 Generating report (attempt 1)
+     SECTION_2  10 Generating section 2: 2024년 4분기 실적 분석
+     SECTION_3  23 Generating section 3: 주요 사업 및 제품 동향
+     SECTION_4  36 Generating section 4: 시장 환경 및 전략 방향
+     STARTED    10 Generating report (attempt 1)
+     SECTION_2  23 Section 2 restored from checkpoint
+     SECTION_3  36 Section 3 restored from checkpoint
+     SECTION_4  36 Generating section 4: 시장 환경 및 전략 방향
+     SECTION_5  50 Generating section 5: 향후 전망 (공식 발표 기반)
+     SECTION_6  63 Generating section 6: 기타 참고사항
+     SUMMARY    76 Generating summary
+     TERMS      95 Extracting domain-specific terms

@@ -1,0 +1,18 @@
+== [15:49:47] worker max.poll.interval.ms=10000, session.timeout.ms=6000, LLM stub delay 1s
+   dcbd9525-3fb9-4afd-98fa-6da7b58148c5 SUCCEEDED at 15:50:11
+   6d17c0a5-8124-439f-b414-a214e0a7a540 SUCCEEDED at 15:50:34
+   dcbd9525-3fb9-4afd-98fa-6da7b58148c5: SUCCEEDED attempts=1 progress=100 report_id=4 msg=Report generated | STARTED events=1
+   6d17c0a5-8124-439f-b414-a214e0a7a540: SUCCEEDED attempts=1 progress=100 report_id=5 msg=Report generated | STARTED events=1
+-- worker log (job timing / rebalance / max poll)
+   2026-10-20 06:49:35,416 INFO myanalyst.generation-worker partitions assigned: ['generation.requested-0', 'generation.requested-1', 'generation.requested-2']
+   2026-10-20 06:49:47,222 INFO myanalyst.generation-worker job=dcbd9525-3fb9-4afd-98fa-6da7b58148c5 attempt=1 received from generation.requested-0@2
+   Full report generation completed in 21.97 seconds.
+   2026-10-20 06:50:10,210 INFO myanalyst.generation-worker job=dcbd9525-3fb9-4afd-98fa-6da7b58148c5 attempt=1 completed in 23.0s
+   2026-10-20 06:50:10,955 INFO myanalyst.generation-worker job=6d17c0a5-8124-439f-b414-a214e0a7a540 attempt=1 received from generation.requested-0@3
+   Full report generation completed in 21.65 seconds.
+   2026-10-20 06:50:33,621 INFO myanalyst.generation-worker job=6d17c0a5-8124-439f-b414-a214e0a7a540 attempt=1 completed in 22.7s
+-- worker metrics
+   worker_jobs_total{result="completed"} 2.0
+   worker_job_duration_seconds_count 2.0
+   worker_job_duration_seconds_sum 45.65411103699989
+   worker_rebalances_total{kind="assigned"} 1.0

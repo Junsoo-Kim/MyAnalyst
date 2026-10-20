@@ -1,0 +1,21 @@
+== [15:45:32] generation-worker 중지
+-- 워커 다운 중 API
+login 200
+   GET /reports            200 (0.007020s)
+   GET /reports/1          200 (0.005250s)
+   GET /reports/1/chat     200 (0.006534s)
+   POST /chat (qa)         200 (0.227470s)
+   POST /report-jobs -> b37c4c19-7a0f-4f00-b928-fc587dfb7df5 (83ms)
+-- [15:46:04] 30초 후: QUEUED attempts=0 progress=0 report_id=- msg=Queued
+   outbox 미완료 발행: 0  (0이면 요청은 이미 Kafka에 있다)
+   generation-worker 그룹 lag:
+     partition=0 offset=1 end=2 lag=1
+== [15:46:06] generation-worker 재기동
+   SUCCEEDED at 15:46:14
+   SUCCEEDED attempts=1 progress=100 report_id=2 msg=Report generated
+   reports for job: 1
+   attempts recorded: 1
+   LLM(stub) calls during recovery: 22
+   worker log:
+     2026-10-20 06:46:08,292 INFO myanalyst.generation-worker job=b37c4c19-7a0f-4f00-b928-fc587dfb7df5 attempt=1 received from generation.requested-0@1
+     2026-10-20 06:46:13,631 INFO myanalyst.generation-worker job=b37c4c19-7a0f-4f00-b928-fc587dfb7df5 attempt=1 completed in 5.3s

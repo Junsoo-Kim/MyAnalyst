@@ -1,0 +1,28 @@
+== [15:46:43] knowledge 중지
+   job=4637b3f5-e9f1-4b10-b234-4bffb3fcea52
+-- [15:46:49] 1차 시도 실패 후: RETRYING attempts=1 progress=10 report_id=- msg=Retrying after a transient error
+== [15:46:49] knowledge 재기동
+   SUCCEEDED at 15:47:10
+-- SSE:
+     RUNNING   attempt 1 | Generating section 2: 2024년 4분기 실적 분석 | 
+     RETRYING  attempt 1 | Retrying after a transient error | 
+     QUEUED    attempt 1 | Requeued for retry | 
+     RUNNING   attempt 2 | Generating report | 
+     RUNNING   attempt 2 | Generating section 2: 2024년 4분기 실적 분석 | 
+     RETRYING  attempt 2 | Retrying after a transient error | 
+     QUEUED    attempt 2 | Requeued for retry | 
+     RUNNING   attempt 3 | Generating report | 
+     RUNNING   attempt 3 | Generating section 2: 2024년 4분기 실적 분석 | 
+     RUNNING   attempt 3 | Generating section 3: 주요 사업 및 제품 동향 | 
+     RUNNING   attempt 3 | Generating section 4: 시장 환경 및 전략 방향 | 
+     RUNNING   attempt 3 | Generating section 5: 향후 전망 (공식 발표 기반) | 
+     RUNNING   attempt 3 | Generating section 6: 기타 참고사항 | 
+     RUNNING   attempt 3 | Generating summary | 
+     RUNNING   attempt 3 | Extracting domain-specific terms | 
+     SUCCEEDED attempt 3 | Report generated | 
+-- attempts:
+    #1 KnowledgeServiceError: knowledge-service 검색 실패: HTTPConnectionPool(host='knowledge', port=
+    #2 KnowledgeServiceError: knowledge-service 검색 실패: HTTPConnectionPool(host='knowledge', port=
+    #3 (ok)
+-- generation.requested messages for job: 3
+-- generation.failed messages for job:    2

@@ -18,20 +18,20 @@ services:
       timeout: 20s
       retries: 3
 
+  # minio/minio is no longer published on Docker Hub (pulls fail with "repository does not exist").
+  # Chainguard's build only ships `latest`, so it is pinned by digest. Its entrypoint is the minio binary
+  # and it has no curl, so there is no container healthcheck; Milvus retries until object storage answers.
   minio:
     container_name: myanalyst-minio
-    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    image: cgr.dev/chainguard/minio@sha256:cff197fef764642223ef9f4444c903d51aee9b544a7be8bc007fef6b7b00d136
+    # The image runs as uid 65532, but a fresh named volume is owned by root ("file access denied").
+    user: "0:0"
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
     volumes:
       - minio_data:/minio_data
-    command: minio server /minio_data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
+    command: ["server", "/minio_data", "--console-address", ":9001"]
 
   milvus:
     container_name: myanalyst-milvus
@@ -130,20 +130,22 @@ services:
       retries: 10
       start_period: 60s
 
-  rag-server:
-    container_name: myanalyst-rag-server
+  # --- Python services (built from ./services so they can share services/python-common) ---
+
+  # Hybrid search API. Owns Milvus + OpenSearch and only reads them.
+  knowledge:
+    container_name: myanalyst-knowledge
     build:
-      context: ./rag_server
+      context: ./services
+      dockerfile: knowledge/Dockerfile
+    image: myanalyst/knowledge:local
     environment:
       MILVUS_HOST: milvus
       MILVUS_PORT: 19530
       OPENSEARCH_HOST: opensearch
       OPENSEARCH_PORT: 9200
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY를 .env에 설정하세요}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - ./processing:/data/processing:ro
     depends_on:
@@ -151,6 +153,75 @@ services:
         condition: service_healthy
       opensearch:
         condition: service_healthy
+
+  # Same image as knowledge, run on demand: docker compose run --rm knowledge-ingest [python ingest.py bm25 --force]
+  knowledge-ingest:
+    image: myanalyst/knowledge:local
+    profiles: ["ingest"]
+    command: ["python", "ingest.py", "bm25"]
+    environment:
+      MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_PORT: 9200
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    volumes:
+      - ./processing:/data/processing:ro
+    depends_on:
+      milvus:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+
+  # Kafka consumer of generation.requested. No container_name so it can be scaled:
+  #   docker compose up -d --scale generation-worker=2
+  generation-worker:
+    build:
+      context: ./services
+      dockerfile: generation-worker/Dockerfile
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KNOWLEDGE_SERVICE_URL: http://knowledge:8000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY를 .env에 설정하세요}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      KAFKA_MAX_POLL_INTERVAL_MS: ${WORKER_MAX_POLL_INTERVAL_MS:-300000}
+    volumes:
+      - worker_data:/app/data
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  market-data:
+    container_name: myanalyst-market-data
+    build:
+      context: ./services
+      dockerfile: market-data/Dockerfile
+    ports:
+      - "8002:8000"
+
+  qa:
+    container_name: myanalyst-qa
+    build:
+      context: ./services
+      dockerfile: qa/Dockerfile
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY를 .env에 설정하세요}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+    ports:
+      - "8003:8000"
+
+  stt:
+    container_name: myanalyst-stt
+    build:
+      context: ./services
+      dockerfile: stt/Dockerfile
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY를 .env에 설정하세요}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+    ports:
+      - "8004:8000"
 
   be:
     container_name: myanalyst-be
@@ -160,7 +231,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/myanalystdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-root}
-      RAG_SERVER_URL: http://rag-server:8000
+      MARKET_DATA_SERVICE_URL: http://market-data:8000
+      QA_SERVICE_URL: http://qa:8000
+      STT_SERVICE_URL: http://stt:8000
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -172,12 +245,11 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
-      rag-server:
-        condition: service_healthy
       redis:
         condition: service_healthy
 
 volumes:
+  worker_data:
   etcd_data:
   minio_data:
   milvus_data:

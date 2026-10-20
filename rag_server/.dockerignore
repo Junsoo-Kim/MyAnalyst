@@ -1,8 +1,0 @@
-logs/
-__pycache__/
-*.pyc
-.env
-.git/
-*.csv
-*.txt
-!requirements.txt

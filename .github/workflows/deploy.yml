@@ -5,7 +5,8 @@ on:
     branches: [main]
     paths:
       - "BE/**"
-      - "rag_server/**"
+      - "services/**"
+      - "contracts/**"
       - ".github/workflows/deploy.yml"
   workflow_dispatch: {}
 
@@ -38,13 +39,24 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install rag_server dependencies
-        working-directory: ./rag_server
-        run: pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+      - name: Install Python service dependencies
+        working-directory: ./services
+        run: |
+          pip install "./python-common[web,llm]"
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+            -r knowledge/requirements.txt -r generation-worker/requirements.txt \
+            -r market-data/requirements.txt -r qa/requirements.txt -r stt/requirements.txt
 
-      - name: Run rag_server tests
-        working-directory: ./rag_server
-        run: python -m unittest discover -s tests -v
+      # Each service is tested from its own directory (flat modules, like its container's /app).
+      # generation-worker's message contract test reads ../../contracts, shared with the BE contract test.
+      - name: Run Python service tests
+        working-directory: ./services
+        run: |
+          for svc in python-common knowledge generation-worker market-data; do
+            echo "::group::$svc"
+            (cd "$svc" && python -m unittest discover -s tests -v)
+            echo "::endgroup::"
+          done
 
       - name: Scan dependencies for known vulnerabilities
         uses: aquasecurity/trivy-action@0.29.0
@@ -57,15 +69,35 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    # The Python services build from ./services so their images can include services/python-common.
+    # ECS services for the split Python services are added to Terraform in MSA stage 7.
     strategy:
       matrix:
         include:
           - name: be
             context: ./BE
+            dockerfile: ./BE/Dockerfile
             container: be
-          - name: rag-server
-            context: ./rag_server
-            container: rag-server
+          - name: knowledge
+            context: ./services
+            dockerfile: ./services/knowledge/Dockerfile
+            container: knowledge
+          - name: generation-worker
+            context: ./services
+            dockerfile: ./services/generation-worker/Dockerfile
+            container: generation-worker
+          - name: market-data
+            context: ./services
+            dockerfile: ./services/market-data/Dockerfile
+            container: market-data
+          - name: qa
+            context: ./services
+            dockerfile: ./services/qa/Dockerfile
+            container: qa
+          - name: stt
+            context: ./services
+            dockerfile: ./services/stt/Dockerfile
+            container: stt
     steps:
       - uses: actions/checkout@v4
 
@@ -85,7 +117,7 @@ jobs:
           REPOSITORY: ${{ env.NAME_PREFIX }}-${{ matrix.name }}
           TAG: ${{ github.sha }}
         run: |
-          docker build -t "$REGISTRY/$REPOSITORY:$TAG" -t "$REGISTRY/$REPOSITORY:latest" "${{ matrix.context }}"
+          docker build -f "${{ matrix.dockerfile }}" -t "$REGISTRY/$REPOSITORY:$TAG" -t "$REGISTRY/$REPOSITORY:latest" "${{ matrix.context }}"
           docker push "$REGISTRY/$REPOSITORY:$TAG"
           docker push "$REGISTRY/$REPOSITORY:latest"
 

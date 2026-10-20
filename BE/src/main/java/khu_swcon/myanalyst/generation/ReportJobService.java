@@ -1,6 +1,8 @@
 package khu_swcon.myanalyst.generation;
 
-import khu_swcon.myanalyst.generation.internal.RagReportClient;
+import khu_swcon.myanalyst.generation.internal.GenerationCompleted;
+import khu_swcon.myanalyst.generation.internal.GenerationFailed;
+import khu_swcon.myanalyst.generation.internal.GenerationProgressed;
 import khu_swcon.myanalyst.generation.internal.ReportGenerationRequested;
 import khu_swcon.myanalyst.generation.internal.ReportJob;
 import khu_swcon.myanalyst.generation.internal.ReportJobAttempt;
@@ -13,6 +15,8 @@ import khu_swcon.myanalyst.shared.ApiException;
 import khu_swcon.myanalyst.shared.observability.TraceContext;
 import khu_swcon.myanalyst.user.UserNotFoundException;
 import khu_swcon.myanalyst.user.UserService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,21 +30,31 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 
 /**
- * 보고서 생성 모듈의 공개 API. Job 상태 변화는 {@link ReportJobStatusChanged} 이벤트로만 내보내고,
- * 이를 SSE로 전달하는 일은 알림 모듈이 맡는다.
+ * 보고서 생성 모듈의 공개 API이자 생성 Job의 상태 기계.
+ *
+ * <p>실제 생성은 Python generation-worker가 한다. 이 클래스는 Job을 만들고 {@code generation.requested}를
+ * 발행한 뒤, 워커가 돌려주는 {@code generation.progressed/completed/failed}로 상태를 옮긴다:
+ * <pre>
+ * QUEUED ──STARTED──▶ RUNNING ──completed──▶ SUCCEEDED
+ *    ▲                  │  └──failed / lease 만료──▶ RETRYING ──(백오프 후 재발행)──┘
+ *    └──────────────────┘                              └── 시도 횟수 초과 ──▶ FAILED
+ * </pre>
+ * 워커가 내려가 있으면 요청은 Kafka에 남고 Job은 QUEUED로 기다린다. 워커가 돌아오면 그대로 처리된다.
+ * 메시지는 최소 한 번 이상 오므로 모든 전이는 "현재 상태 + 시도 번호"를 확인한 뒤에만 일어난다.
+ * Job 상태 변화는 {@link ReportJobStatusChanged}로만 내보내고, SSE 전달은 알림 모듈이 맡는다.
  */
 @Service
 public class ReportJobService {
+    private static final Logger log = LoggerFactory.getLogger(ReportJobService.class);
+
     private final ReportJobRepository jobRepository;
     private final ReportJobAttemptRepository attemptRepository;
     private final UserService userService;
     private final ReportService reportService;
-    private final RagReportClient ragReportClient;
-    private final ExecutorService reportJobExecutor;
     private final TransactionTemplate transactionTemplate;
     private final ReportJobMetrics reportJobMetrics;
     private final ApplicationEventPublisher events;
@@ -52,8 +66,6 @@ public class ReportJobService {
             ReportJobAttemptRepository attemptRepository,
             UserService userService,
             ReportService reportService,
-            RagReportClient ragReportClient,
-            ExecutorService reportJobExecutor,
             TransactionTemplate transactionTemplate,
             ReportJobMetrics reportJobMetrics,
             ApplicationEventPublisher events,
@@ -63,8 +75,6 @@ public class ReportJobService {
         this.attemptRepository = attemptRepository;
         this.userService = userService;
         this.reportService = reportService;
-        this.ragReportClient = ragReportClient;
-        this.reportJobExecutor = reportJobExecutor;
         this.transactionTemplate = transactionTemplate;
         this.reportJobMetrics = reportJobMetrics;
         this.events = events;
@@ -125,8 +135,8 @@ public class ReportJobService {
         // 안에서 바로 확인한다(지연 flush면 이 메서드가 반환된 뒤에야 터진다).
         ReportJob savedJob = jobRepository.saveAndFlush(job);
         // 같은 트랜잭션에서 발행하므로 Modulith 이벤트 레지스트리에 Job과 함께 커밋되고(Outbox),
-        // 커밋 후 Kafka로 나간다. 브로커가 내려가 있어도 요청은 202로 끝나고 발행은 나중에 재시도된다.
-        events.publishEvent(new ReportGenerationRequested(savedJob.getJobId()));
+        // 커밋 후 Kafka로 나간다. 브로커나 워커가 내려가 있어도 요청은 202로 끝난다.
+        events.publishEvent(ReportGenerationRequested.of(savedJob, 1));
         reportJobMetrics.recordStatus(ReportJobStatus.QUEUED.name());
         return ReportJobResponseDto.from(savedJob);
     }
@@ -152,19 +162,144 @@ public class ReportJobService {
         return publishStatus(job);
     }
 
+    // --- 워커 이벤트 ---------------------------------------------------------------------------
+
     /**
-     * Kafka {@code generation.requested}를 소비한다. claim과 실행은 각자 트랜잭션을 열기 때문에 이 리스너
-     * 자체는 트랜잭션 없이 둔다. claim이 비관적 락으로 멱등하므로 같은 메시지가 다시 와도 Job은 한 번만
-     * 실행된다. 예외가 나면 공통 에러 핸들러가 재시도 후 DLT로 보낸다.
+     * {@code STARTED}면 시도를 시작하고(RUNNING, lease 설정), 그 밖의 단계는 진행률을 갱신하며 lease를 늘린다.
+     * 워커는 섹션마다 이 이벤트를 보내므로, 이벤트가 끊긴 채 lease가 지나면 워커가 죽은 것으로 보고 재시도한다.
      */
-    @KafkaListener(topics = ReportGenerationRequested.TOPIC, groupId = "generation-dispatcher")
-    public void on(ReportGenerationRequested event) {
-        dispatch(event.jobId());
+    @KafkaListener(topics = GenerationProgressed.TOPIC, groupId = "generation-tracker")
+    public void on(GenerationProgressed event) {
+        if (GenerationProgressed.STARTED.equals(event.stage())) {
+            transactionTemplate.execute(status -> startAttempt(event.jobId(), event.attempt()));
+        } else {
+            transactionTemplate.executeWithoutResult(status -> recordProgress(event));
+        }
     }
 
     /**
-     * 백오프 시간이 지난 RETRYING Job을 다시 큐에 넣고, lease가 만료된 RUNNING Job을 복구한다.
-     * 실행은 직접 하지 않고 {@link ReportGenerationRequested}를 다시 발행해 최초 실행과 같은 Kafka 경로를 탄다.
+     * 보고서를 저장하고 Job을 완료한다. 보고서 저장은 생성 Job ID로 멱등하므로 같은 완료 이벤트가 다시 와도
+     * 보고서는 하나만 생긴다. 이미 끝났거나 취소된 Job의 완료는 무시한다.
+     */
+    @KafkaListener(topics = GenerationCompleted.TOPIC, groupId = "generation-tracker")
+    public void on(GenerationCompleted event) {
+        ReportJob job = transactionTemplate.execute(status -> jobRepository.findById(event.jobId()).orElse(null));
+        if (job == null || isTerminal(job.getStatus())) {
+            log.info("job={} attempt={}: completion ignored (status={})", event.jobId(), event.attempt(),
+                    job == null ? "missing" : job.getStatus());
+            return;
+        }
+        Integer reportId = reportService.saveGeneratedReport(new GeneratedReport(
+                job.getJobId(), job.getUserId(), job.getTitle(), job.getChapter(), job.getIndicator(),
+                job.getCompany(), job.getDate(), event.report(), event.terms() == null ? List.of() : event.terms()));
+        transactionTemplate.executeWithoutResult(status -> markSucceeded(event.jobId(), event.attempt(), reportId));
+    }
+
+    @KafkaListener(topics = GenerationFailed.TOPIC, groupId = "generation-tracker")
+    public void on(GenerationFailed event) {
+        transactionTemplate.executeWithoutResult(status ->
+                markFailedAttempt(event.jobId(), event.attempt(), event.error(), event.retryable()));
+    }
+
+    /** 동시성 테스트용: 같은 STARTED가 여러 번(여러 스레드에서) 와도 시도는 한 번만 시작되는지 확인한다. */
+    boolean startAttemptForTest(UUID jobId, int attempt) {
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> startAttempt(jobId, attempt)));
+    }
+
+    private boolean startAttempt(UUID jobId, int attempt) {
+        ReportJob job = jobRepository.findWithLockByJobId(jobId).orElse(null);
+        if (job == null || isTerminal(job.getStatus())) {
+            return false;
+        }
+        Instant now = Instant.now();
+        if (job.getStatus() == ReportJobStatus.RUNNING && job.getAttemptCount() == attempt) {
+            // 같은 요청이 다시 전달되어 워커가 한 번 더 시작했다. 상태는 그대로 두고 lease만 늘린다.
+            job.setLeaseExpiresAt(now.plus(leaseDuration));
+            return false;
+        }
+        if (job.getStatus() != ReportJobStatus.QUEUED || attempt != job.getAttemptCount() + 1) {
+            log.info("job={} attempt={}: stale STARTED ignored (status={}, attemptCount={})",
+                    jobId, attempt, job.getStatus(), job.getAttemptCount());
+            return false;
+        }
+        job.setAttemptCount(attempt);
+        job.setStatus(ReportJobStatus.RUNNING);
+        job.setProgress(10);
+        job.setProgressMessage("Generating report");
+        job.setLeaseExpiresAt(now.plus(leaseDuration));
+        job.setUpdatedAt(now);
+        attemptRepository.save(ReportJobAttempt.builder()
+                .job(job)
+                .attemptNumber(attempt)
+                .startedAt(now)
+                .build());
+        reportJobMetrics.recordStatus(ReportJobStatus.RUNNING.name());
+        publishStatus(job);
+        return true;
+    }
+
+    private void recordProgress(GenerationProgressed event) {
+        ReportJob job = jobRepository.findWithLockByJobId(event.jobId()).orElse(null);
+        if (job == null || job.getStatus() != ReportJobStatus.RUNNING || job.getAttemptCount() != event.attempt()) {
+            return;
+        }
+        Instant now = Instant.now();
+        job.setProgress(Math.max(job.getProgress(), Math.min(99, event.progress())));
+        job.setProgressMessage(event.message());
+        job.setLeaseExpiresAt(now.plus(leaseDuration));
+        job.setUpdatedAt(now);
+        publishStatus(job);
+    }
+
+    private void markSucceeded(UUID jobId, int attempt, Integer reportId) {
+        ReportJob job = jobRepository.findWithLockByJobId(jobId).orElseThrow();
+        if (isTerminal(job.getStatus())) {
+            return;
+        }
+        Instant now = Instant.now();
+        job.setStatus(ReportJobStatus.SUCCEEDED);
+        job.setAttemptCount(Math.max(job.getAttemptCount(), attempt));
+        job.setProgress(100);
+        job.setProgressMessage("Report generated");
+        job.setReportId(reportId);
+        job.setLeaseExpiresAt(null);
+        job.setUpdatedAt(now);
+        finishCurrentAttempt(job, now, null)
+                .ifPresent(started -> reportJobMetrics.recordExecution(Duration.between(started.getStartedAt(), now), "succeeded"));
+        reportJobMetrics.recordStatus(ReportJobStatus.SUCCEEDED.name());
+        publishStatus(job);
+    }
+
+    private void markFailedAttempt(UUID jobId, int attempt, String error, boolean retryable) {
+        ReportJob job = jobRepository.findWithLockByJobId(jobId).orElse(null);
+        if (job == null || job.getStatus() != ReportJobStatus.RUNNING || job.getAttemptCount() != attempt) {
+            return;
+        }
+        Instant now = Instant.now();
+        job.setLastError(error);
+        job.setLeaseExpiresAt(null);
+        finishCurrentAttempt(job, now, error)
+                .ifPresent(started -> reportJobMetrics.recordExecution(Duration.between(started.getStartedAt(), now), "failed"));
+        if (!retryable || job.getAttemptCount() >= job.getMaxAttempts()) {
+            job.setStatus(ReportJobStatus.FAILED);
+            job.setProgressMessage("Report generation failed");
+            reportJobMetrics.recordStatus(ReportJobStatus.FAILED.name());
+        } else {
+            long delaySeconds = Math.min(60, 5L * (1L << Math.max(0, job.getAttemptCount() - 1)));
+            job.setStatus(ReportJobStatus.RETRYING);
+            job.setProgressMessage("Retrying after a transient error");
+            job.setNextAttemptAt(now.plusSeconds(delaySeconds));
+            reportJobMetrics.recordStatus(ReportJobStatus.RETRYING.name());
+        }
+        job.setUpdatedAt(now);
+        publishStatus(job);
+    }
+
+    // --- 재시도·복구 ----------------------------------------------------------------------------
+
+    /**
+     * 백오프 시간이 지난 RETRYING Job을 다시 큐에 넣고, lease가 만료된 RUNNING Job(워커가 죽었거나 진행 이벤트가
+     * 끊긴 Job)을 RETRYING으로 돌린다. QUEUED Job은 보지 않는다 — 워커가 내려가 있는 동안 요청은 Kafka에서 기다린다.
      */
     @Scheduled(fixedDelayString = "${app.report-jobs.poll-interval-ms:1000}")
     public void dispatchDueRetries() {
@@ -176,8 +311,8 @@ public class ReportJobService {
     }
 
     /**
-     * RETRYING → QUEUED로 바꾸고 생성 요청을 같은 트랜잭션에서 발행한다. 상태를 바꿔 두므로 다음 폴링에서
-     * 같은 Job을 또 발행하지 않는다.
+     * RETRYING → QUEUED로 바꾸고 다음 시도 번호로 생성 요청을 같은 트랜잭션에서 발행한다. 상태를 바꿔 두므로
+     * 다음 폴링에서 같은 Job을 또 발행하지 않는다.
      */
     private void requeue(UUID jobId) {
         ReportJob job = jobRepository.findWithLockByJobId(jobId).orElse(null);
@@ -185,21 +320,18 @@ public class ReportJobService {
         if (job == null || job.getStatus() != ReportJobStatus.RETRYING || job.getNextAttemptAt().isAfter(now)) {
             return;
         }
+        job.setUpdatedAt(now);
+        if (job.getAttemptCount() >= job.getMaxAttempts()) {
+            job.setStatus(ReportJobStatus.FAILED);
+            job.setProgressMessage("Retry limit exceeded");
+            reportJobMetrics.recordStatus(ReportJobStatus.FAILED.name());
+            publishStatus(job);
+            return;
+        }
         job.setStatus(ReportJobStatus.QUEUED);
         job.setProgressMessage("Requeued for retry");
-        job.setUpdatedAt(now);
-        events.publishEvent(new ReportGenerationRequested(jobId));
+        events.publishEvent(ReportGenerationRequested.of(job, job.getAttemptCount() + 1));
         publishStatus(job);
-    }
-
-    private void dispatch(UUID jobId) {
-        if (Boolean.TRUE.equals(transactionTemplate.execute(status -> claim(jobId)))) {
-            reportJobExecutor.submit(() -> execute(jobId));
-        }
-    }
-
-    boolean claimForTest(UUID jobId) {
-        return Boolean.TRUE.equals(transactionTemplate.execute(status -> claim(jobId)));
     }
 
     private void recoverExpiredJob(UUID jobId) {
@@ -218,125 +350,14 @@ public class ReportJobService {
         publishStatus(job);
     }
 
-    private boolean claim(UUID jobId) {
-        ReportJob job = jobRepository.findWithLockByJobId(jobId).orElse(null);
-        if (job == null || job.getStatus() == ReportJobStatus.CANCELLED
-                || job.getStatus() == ReportJobStatus.SUCCEEDED || job.getStatus() == ReportJobStatus.FAILED) {
-            return false;
-        }
-        Instant now = Instant.now();
-        if (job.getStatus() == ReportJobStatus.RUNNING && job.getLeaseExpiresAt() != null
-                && job.getLeaseExpiresAt().isAfter(now)) {
-            return false;
-        }
-        if ((job.getStatus() == ReportJobStatus.QUEUED || job.getStatus() == ReportJobStatus.RETRYING)
-                && job.getNextAttemptAt().isAfter(now)) {
-            return false;
-        }
-        if (job.getAttemptCount() >= job.getMaxAttempts()) {
-            job.setStatus(ReportJobStatus.FAILED);
-            job.setProgressMessage("Retry limit exceeded");
-            job.setUpdatedAt(now);
-            publishStatus(job);
-            return false;
-        }
-
-        job.setAttemptCount(job.getAttemptCount() + 1);
-        job.setStatus(ReportJobStatus.RUNNING);
-        job.setProgress(10);
-        job.setProgressMessage("Generating report");
-        job.setLeaseExpiresAt(now.plus(leaseDuration));
-        job.setUpdatedAt(now);
-        attemptRepository.save(ReportJobAttempt.builder()
-                .job(job)
-                .attemptNumber(job.getAttemptCount())
-                .startedAt(now)
-                .build());
-        reportJobMetrics.recordStatus(ReportJobStatus.RUNNING.name());
-        publishStatus(job);
-        return true;
-    }
-
-    private void execute(UUID jobId) {
-        long startedAtNanos = System.nanoTime();
-        try {
-            ReportJob job = transactionTemplate.execute(status -> jobRepository.findById(jobId).orElseThrow());
-            TraceContext.bind(job.getTraceId());
-            // 이전 시도가 보고서 저장 직후 중단됐다면 RAG를 다시 호출하지 않고 저장된 결과로 완료한다.
-            Integer reportId = reportService.findReportIdByGenerationJobId(jobId)
-                    .orElseGet(() -> reportService.saveGeneratedReport(generate(job)));
-            transactionTemplate.executeWithoutResult(status -> markSucceeded(jobId, reportId));
-            reportJobMetrics.recordExecution(startedAtNanos, "succeeded");
-        } catch (Exception exception) {
-            transactionTemplate.executeWithoutResult(status -> markFailedAttempt(jobId, rootMessage(exception)));
-            reportJobMetrics.recordExecution(startedAtNanos, "failed");
-        } finally {
-            TraceContext.clear();
-        }
-    }
-
-    private GeneratedReport generate(ReportJob job) {
-        RagReportClient.GeneratedContent generated = ragReportClient.generate(job);
-        return new GeneratedReport(
-                job.getJobId(),
-                job.getUserId(),
-                job.getTitle(),
-                job.getChapter(),
-                job.getIndicator(),
-                job.getCompany(),
-                job.getDate(),
-                generated.report(),
-                generated.terms());
-    }
-
-    private void markSucceeded(UUID jobId, Integer reportId) {
-        ReportJob job = jobRepository.findWithLockByJobId(jobId).orElseThrow();
-        if (job.getStatus() == ReportJobStatus.CANCELLED) {
-            return;
-        }
-        Instant now = Instant.now();
-        job.setStatus(ReportJobStatus.SUCCEEDED);
-        job.setProgress(100);
-        job.setProgressMessage("Report generated");
-        job.setReportId(reportId);
-        job.setLeaseExpiresAt(null);
-        job.setUpdatedAt(now);
-        finishCurrentAttempt(job, now, null);
-        reportJobMetrics.recordStatus(ReportJobStatus.SUCCEEDED.name());
-        publishStatus(job);
-    }
-
-    private void markFailedAttempt(UUID jobId, String error) {
-        ReportJob job = jobRepository.findWithLockByJobId(jobId).orElse(null);
-        if (job == null || job.getStatus() == ReportJobStatus.CANCELLED) {
-            return;
-        }
-        Instant now = Instant.now();
-        job.setLastError(error);
-        job.setLeaseExpiresAt(null);
-        finishCurrentAttempt(job, now, error);
-        if (job.getAttemptCount() >= job.getMaxAttempts()) {
-            job.setStatus(ReportJobStatus.FAILED);
-            job.setProgressMessage("Report generation failed");
-            reportJobMetrics.recordStatus(ReportJobStatus.FAILED.name());
-        } else {
-            long delaySeconds = Math.min(60, 5L * (1L << Math.max(0, job.getAttemptCount() - 1)));
-            job.setStatus(ReportJobStatus.RETRYING);
-            job.setProgressMessage("Retrying after a transient error");
-            job.setNextAttemptAt(now.plusSeconds(delaySeconds));
-            reportJobMetrics.recordStatus(ReportJobStatus.RETRYING.name());
-        }
-        job.setUpdatedAt(now);
-        publishStatus(job);
-    }
-
-    private void finishCurrentAttempt(ReportJob job, Instant finishedAt, String error) {
-        attemptRepository.findTopByJobOrderByAttemptNumberDesc(job).ifPresent(attempt -> {
-            if (attempt.getFinishedAt() == null) {
-                attempt.setFinishedAt(finishedAt);
-                attempt.setError(error);
-            }
-        });
+    private Optional<ReportJobAttempt> finishCurrentAttempt(ReportJob job, Instant finishedAt, String error) {
+        return attemptRepository.findTopByJobOrderByAttemptNumberDesc(job)
+                .filter(attempt -> attempt.getFinishedAt() == null)
+                .map(attempt -> {
+                    attempt.setFinishedAt(finishedAt);
+                    attempt.setError(error);
+                    return attempt;
+                });
     }
 
     private ReportJob findOwnedJob(UUID jobId, String userId) {
@@ -344,19 +365,17 @@ public class ReportJobService {
                 .orElseThrow(() -> new ApiException("Report job not found", HttpStatus.NOT_FOUND));
     }
 
+    private static boolean isTerminal(ReportJobStatus status) {
+        return status == ReportJobStatus.SUCCEEDED || status == ReportJobStatus.FAILED
+                || status == ReportJobStatus.CANCELLED;
+    }
+
     private static String defaultValue(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    private static String rootMessage(Exception exception) {
-        Throwable cause = exception;
-        while (cause.getCause() != null) cause = cause.getCause();
-        String message = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
-        return message.length() > 2000 ? message.substring(0, 2000) : message;
-    }
-
     /**
-     * 현재 트랜잭션 안에서 상태 변경 이벤트를 발행한다. 알림 모듈의 리스너는 커밋 이후에만 받으므로
+     * 현재 트랜잭션 안에서 상태 변경 이벤트를 발행한다. Kafka로는 커밋 이후에만 나가므로
      * 롤백된 상태가 SSE로 나가지 않는다.
      */
     private ReportJobResponseDto publishStatus(ReportJob job) {

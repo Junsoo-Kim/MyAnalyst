@@ -1,6 +1,7 @@
 package khu_swcon.myanalyst.marketdata;
 
 import khu_swcon.myanalyst.shared.ApiException;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
@@ -13,15 +14,15 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.util.List;
 
 /**
- * 뉴스·주가·차트 조회. 보고서와 무관하게 RAG 서버의 크롤링 API를 중계하고 Redis에 캐시한다.
+ * 뉴스·주가·차트 조회. 보고서와 무관하게 market-data-service의 크롤링 API를 중계하고 Redis에 캐시한다.
  */
 @Service
 public class MarketDataService {
 
     private final WebClient webClient;
 
-    public MarketDataService(WebClient ragWebClient) {
-        this.webClient = ragWebClient;
+    public MarketDataService(@Qualifier("marketDataWebClient") WebClient marketDataWebClient) {
+        this.webClient = marketDataWebClient;
     }
 
     /**

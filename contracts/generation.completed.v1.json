@@ -1,0 +1,9 @@
+{
+  "jobId": "2984b8fe-bb70-48a1-b232-a731858e1517",
+  "attempt": 1,
+  "report": "### 1. Executive Summary\n\n...",
+  "terms": [
+    {"term": "PER", "explanation": "Price to earnings ratio"}
+  ],
+  "generationTimeSeconds": 42.5
+}

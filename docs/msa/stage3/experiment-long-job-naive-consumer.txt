@@ -1,0 +1,14 @@
+06:47:50 start job-A (delivery #1)
+%4|1792478880.646|MAXPOLL|rdkafka#consumer-1| [thrd:main]: Application maximum poll interval (10000ms) exceeded by 405ms (adjust max.poll.interval.ms for long-running message processing): leaving group
+06:48:10 done  job-A COMMIT FAILED: Commit failed: Broker: Unknown member
+06:48:10 start job-A (delivery #2)
+%4|1792478900.252|MAXPOLL|rdkafka#consumer-1| [thrd:main]: Application maximum poll interval (10000ms) exceeded by 4ms (adjust max.poll.interval.ms for long-running message processing): leaving group
+06:48:30 done  job-A COMMIT FAILED: Commit failed: Broker: Unknown member
+06:48:30 start job-A (delivery #3)
+%4|1792478920.255|MAXPOLL|rdkafka#consumer-1| [thrd:main]: Application maximum poll interval (10000ms) exceeded by 5ms (adjust max.poll.interval.ms for long-running message processing): leaving group
+06:48:50 done  job-A COMMIT FAILED: Commit failed: Broker: Unknown member
+06:48:50 start job-A (delivery #4)
+%4|1792478940.258|MAXPOLL|rdkafka#consumer-1| [thrd:main]: Application maximum poll interval (10000ms) exceeded by 6ms (adjust max.poll.interval.ms for long-running message processing): leaving group
+06:49:10 done  job-A COMMIT FAILED: Commit failed: Broker: Unknown member
+rebalance/error events: [('assigned', [0]), ('error', 'KafkaError{code=_MAX_POLL_EXCEEDED,val=-147,str="Application maximum poll interval (10000ms) exceeded by 405ms"}'), ('revoked', [0]), ('assigned', [0]), ('error', 'KafkaError{code=_MAX_POLL_EXCEEDED,val=-147,str="Application maximum poll interval (10000ms) exceeded by 4ms"}'), ('revoked', [0]), ('assigned', [0]), ('error', 'KafkaError{code=_MAX_POLL_EXCEEDED,val=-147,str="Application maximum poll interval (10000ms) exceeded by 5ms"}'), ('revoked', [0]), ('assigned', [0]), ('revoked', [0])]
+deliveries per message: {'job-A': 4}

@@ -1,6 +1,8 @@
 package khu_swcon.myanalyst.generation;
 
-import khu_swcon.myanalyst.generation.internal.RagReportClient;
+import khu_swcon.myanalyst.generation.internal.GenerationCompleted;
+import khu_swcon.myanalyst.generation.internal.GenerationFailed;
+import khu_swcon.myanalyst.generation.internal.GenerationProgressed;
 import khu_swcon.myanalyst.generation.internal.ReportGenerationRequested;
 import khu_swcon.myanalyst.generation.internal.ReportJob;
 import khu_swcon.myanalyst.generation.internal.ReportJobAttemptRepository;
@@ -21,7 +23,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,8 +39,6 @@ class ReportJobServiceTest {
     private ReportJobAttemptRepository attemptRepository;
     private UserService userService;
     private ReportService reportService;
-    private RagReportClient ragReportClient;
-    private ExecutorService reportJobExecutor;
     private TransactionTemplate transactionTemplate;
     private ReportJobMetrics reportJobMetrics;
     private ApplicationEventPublisher events;
@@ -51,8 +50,6 @@ class ReportJobServiceTest {
         attemptRepository = mock(ReportJobAttemptRepository.class);
         userService = mock(UserService.class);
         reportService = mock(ReportService.class);
-        ragReportClient = mock(RagReportClient.class);
-        reportJobExecutor = mock(ExecutorService.class);
         transactionTemplate = mock(TransactionTemplate.class);
         reportJobMetrics = mock(ReportJobMetrics.class);
         events = mock(ApplicationEventPublisher.class);
@@ -71,9 +68,8 @@ class ReportJobServiceTest {
         when(attemptRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         service = new ReportJobService(
-                jobRepository, attemptRepository, userService, reportService, ragReportClient,
-                reportJobExecutor, transactionTemplate, reportJobMetrics, events,
-                MAX_ATTEMPTS, 300);
+                jobRepository, attemptRepository, userService, reportService,
+                transactionTemplate, reportJobMetrics, events, MAX_ATTEMPTS, 300);
     }
 
     private ReportJobRequestDto request() {
@@ -88,18 +84,14 @@ class ReportJobServiceTest {
     }
 
     private ReportJob queuedJob(UUID jobId) {
-        return ReportJob.builder()
+        ReportJob job = ReportJob.builder()
                 .jobId(jobId).userId("u1").status(ReportJobStatus.QUEUED)
                 .attemptCount(0).maxAttempts(MAX_ATTEMPTS).nextAttemptAt(Instant.now().minusSeconds(1))
                 .traceId("t").title("t").company("c").date("d")
                 .createdAt(Instant.now()).updatedAt(Instant.now()).build();
-    }
-
-    private void runSubmittedTasksInline() {
-        when(reportJobExecutor.submit(any(Runnable.class))).thenAnswer(invocation -> {
-            ((Runnable) invocation.getArgument(0)).run();
-            return null;
-        });
+        when(jobRepository.findWithLockByJobId(jobId)).thenReturn(Optional.of(job));
+        when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        return job;
     }
 
     @Test
@@ -135,39 +127,34 @@ class ReportJobServiceTest {
         ArgumentCaptor<ReportGenerationRequested> captor = ArgumentCaptor.forClass(ReportGenerationRequested.class);
         verify(events).publishEvent(captor.capture());
         assertThat(captor.getValue().jobId()).isEqualTo(response.getJobId());
+        assertThat(captor.getValue().attempt()).isEqualTo(1);
+        assertThat(captor.getValue().company()).isEqualTo("셀트리온");
     }
 
     @Test
-    void generationRequested_dispatchesAndExecutesJobExactlyOnce() {
+    void startedThenCompleted_savesReportExactlyOnce_evenWhenCompletionIsRedelivered() {
         UUID jobId = UUID.randomUUID();
         ReportJob job = queuedJob(jobId);
-        when(jobRepository.findWithLockByJobId(jobId)).thenReturn(Optional.of(job));
-        when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
-        when(reportService.findReportIdByGenerationJobId(jobId)).thenReturn(Optional.empty());
-        when(ragReportClient.generate(job)).thenReturn(new RagReportClient.GeneratedContent("generated", List.of()));
         when(reportService.saveGeneratedReport(any())).thenReturn(42);
-        runSubmittedTasksInline();
+        GenerationCompleted completed = new GenerationCompleted(jobId, 1, "generated", List.of(), 1.0);
 
-        service.on(new ReportGenerationRequested(jobId));
+        service.on(new GenerationProgressed(jobId, 1, GenerationProgressed.STARTED, 10, "started"));
+        service.on(completed);
+        service.on(completed);
 
         assertThat(job.getStatus()).isEqualTo(ReportJobStatus.SUCCEEDED);
         assertThat(job.getAttemptCount()).isEqualTo(1);
         assertThat(job.getReportId()).isEqualTo(42);
-        verify(ragReportClient, times(1)).generate(job);
         verify(reportService, times(1)).saveGeneratedReport(any());
     }
 
     @Test
-    void failedExecution_schedulesRetry_beforeAttemptLimit() {
+    void failedAttempt_schedulesRetry_beforeAttemptLimit() {
         UUID jobId = UUID.randomUUID();
         ReportJob job = queuedJob(jobId);
-        when(jobRepository.findWithLockByJobId(jobId)).thenReturn(Optional.of(job));
-        when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
-        when(reportService.findReportIdByGenerationJobId(jobId)).thenReturn(Optional.empty());
-        when(ragReportClient.generate(job)).thenThrow(new ApiException("rag down", org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR));
-        runSubmittedTasksInline();
 
-        service.on(new ReportGenerationRequested(jobId));
+        service.on(new GenerationProgressed(jobId, 1, GenerationProgressed.STARTED, 10, "started"));
+        service.on(new GenerationFailed(jobId, 1, "rag down", true));
 
         assertThat(job.getStatus()).isEqualTo(ReportJobStatus.RETRYING);
         assertThat(job.getLastError()).contains("rag down");

@@ -4,7 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 @Component
 public class ReportJobMetrics {
@@ -18,10 +18,11 @@ public class ReportJobMetrics {
         meterRegistry.counter("report.jobs.transitions", "status", status).increment();
     }
 
-    public void recordExecution(long startedAtNanos, String result) {
+    /** 시도 시작(워커의 STARTED)부터 결과 수신까지. */
+    public void recordExecution(Duration elapsed, String result) {
         Timer.builder("report.job.execution")
                 .tag("result", result)
                 .register(meterRegistry)
-                .record(System.nanoTime() - startedAtNanos, TimeUnit.NANOSECONDS);
+                .record(elapsed);
     }
 }
