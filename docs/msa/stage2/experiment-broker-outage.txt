@@ -1,0 +1,23 @@
+== [14:47:14] 브로커 중지
+== [14:47:15] 브로커 다운 상태에서 BE (재)기동
+   BE health UP: yes (14:47:25)
+-- 브로커 다운 중 API
+login 200
+   GET /reports 200 (0.015858s)
+   GET /reports/1/dictionary 200 (0.020032s)
+   POST /report-jobs -> fbf08219-a359-4e40-ba96-be404a5bc55e (111ms), status=QUEUED
+   15초 후: new=QUEUED old(k-down-1)=QUEUED incomplete=2
+== [14:47:41] 브로커 재기동
+   36126730-d2ed-4e19-814c-f56d35311f69 SUCCEEDED at 14:47:56
+   fbf08219-a359-4e40-ba96-be404a5bc55e SUCCEEDED at 14:48:26
+k-down-1: attempts=1 report_id=2 reports_for_job=1
+k-down-2: attempts=1 report_id=3 reports_for_job=1
+   RAG 호출 횟수: k-down-1=1 k-down-2=1
+   incomplete publications: 0
+      1 05:47:27 Kafka 토픽 확인 실패(브로커 연결 불가), 다음 주기에 재시도
+      1 05:47:41 Kafka 토픽 확인 실패, 다음 주기에 재시도: No resolvable bootstrap urls given in bootstrap.servers
+      1 05:47:51 Kafka 리스너 시작: org.springframework.kafka.KafkaListenerEndpointContainer#2
+      1 05:47:51 Kafka 리스너 시작: org.springframework.kafka.KafkaListenerEndpointContainer#3
+      1 05:47:51 Kafka 리스너 시작: org.springframework.kafka.KafkaListenerEndpointContainer#4
+      1 05:47:51 Kafka 리스너 시작: org.springframework.kafka.KafkaListenerEndpointContainer#0
+      1 05:47:51 Kafka 리스너 시작: org.springframework.kafka.KafkaListenerEndpointContainer#1

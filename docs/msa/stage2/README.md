@@ -55,7 +55,7 @@ job.status-changed ──→ [notification-<인스턴스별 UUID>] SSE
 `report.created`에 `cleanup.policy=compact`가 적용된 것을 확인했다. 메시지 key가 jobId/reportId이고 `event-type`,
 `event-version` 헤더가 붙어 있는 것도 확인했다.
 
-### E2·E3. 브로커 장애 + 장애 중 BE 재시작 ([로그](experiment-broker-outage.log))
+### E2·E3. 브로커 장애 + 장애 중 BE 재시작 ([로그](experiment-broker-outage.txt))
 
 | 시점 | 결과 |
 |---|---|
