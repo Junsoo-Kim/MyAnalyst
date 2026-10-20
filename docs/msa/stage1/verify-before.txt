@@ -1,0 +1,386 @@
+org.springframework.modulith.core.Violations: 
+- Cycle detected: Slice chat -> 
+                Slice report -> 
+                Slice chat
+  1. Dependencies of Slice chat
+    - Constructor <khu_swcon.myanalyst.chat.ChatService.<init>(khu_swcon.myanalyst.chat.internal.ChatRepository, khu_swcon.myanalyst.report.internal.ReportRepository, org.springframework.web.reactive.function.client.WebClient)> has parameter of type <khu_swcon.myanalyst.report.internal.ReportRepository> in (ChatService.java:0)
+    - Constructor <khu_swcon.myanalyst.chat.internal.Chat.<init>(java.lang.Integer, khu_swcon.myanalyst.report.internal.Report, java.lang.String, java.lang.String)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+    - Field <khu_swcon.myanalyst.chat.ChatService.reportRepository> has type <khu_swcon.myanalyst.report.internal.ReportRepository> in (ChatService.java:0)
+    - Field <khu_swcon.myanalyst.chat.internal.Chat$ChatBuilder.report> has type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+    - Field <khu_swcon.myanalyst.chat.internal.Chat.report> has type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+    - Method <khu_swcon.myanalyst.chat.ChatService.assertOwner(khu_swcon.myanalyst.report.internal.Report, java.lang.String)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (ChatService.java:0)
+    - Method <khu_swcon.myanalyst.chat.internal.Chat$ChatBuilder.report(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+    - Method <khu_swcon.myanalyst.chat.internal.Chat.getReport()> has return type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+    - Method <khu_swcon.myanalyst.chat.internal.Chat.setReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+    - Method <khu_swcon.myanalyst.chat.internal.ChatRepository.findByReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (ChatRepository.java:0)
+    - Method <khu_swcon.myanalyst.chat.ChatService.processChat(khu_swcon.myanalyst.chat.ChatRequestDto, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.ReportRepository.findById(java.lang.Object)> in (ChatService.java:52)
+    - Method <khu_swcon.myanalyst.chat.ChatService.processChat(khu_swcon.myanalyst.chat.ChatRequestDto, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.Report.getContent()> in (ChatService.java:58)
+    - Method <khu_swcon.myanalyst.chat.ChatService.getChatHistoryByReportId(java.lang.Integer, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.ReportRepository.findById(java.lang.Object)> in (ChatService.java:106)
+    - Method <khu_swcon.myanalyst.chat.ChatService.processSttChat(khu_swcon.myanalyst.chat.ChatSttRequestDto, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.ReportRepository.findById(java.lang.Object)> in (ChatService.java:132)
+    - Method <khu_swcon.myanalyst.chat.ChatService.processSttChat(khu_swcon.myanalyst.chat.ChatSttRequestDto, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.Report.getContent()> in (ChatService.java:139)
+    - Method <khu_swcon.myanalyst.chat.ChatService.assertOwner(khu_swcon.myanalyst.report.internal.Report, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.Report.getUser()> in (ChatService.java:206)
+  2. Dependencies of Slice report
+    - Constructor <khu_swcon.myanalyst.report.internal.Report.<init>(java.lang.Integer, khu_swcon.myanalyst.user.internal.User, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.util.UUID, java.util.List, java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Constructor <khu_swcon.myanalyst.report.web.ReportController.<init>(khu_swcon.myanalyst.report.ReportService, khu_swcon.myanalyst.dictionary.DictionaryService, khu_swcon.myanalyst.chat.ChatService)> has parameter of type <khu_swcon.myanalyst.chat.ChatService> in (ReportController.java:0)
+    - Field <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.chats> has generic type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Field <khu_swcon.myanalyst.report.internal.Report.chats> has generic type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Field <khu_swcon.myanalyst.report.web.ReportController.chatService> has type <khu_swcon.myanalyst.chat.ChatService> in (ReportController.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.chats(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report.getChats()> has generic return type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report.setChats(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.web.ReportController.getChatHistoryByReportId(java.lang.Integer, jakarta.servlet.http.HttpSession)> calls method <khu_swcon.myanalyst.chat.ChatService.getChatHistoryByReportId(java.lang.Integer, java.lang.String)> in (ReportController.java:193)
+- Cycle detected: Slice chat -> 
+                Slice user -> 
+                Slice report -> 
+                Slice chat
+  1. Dependencies of Slice chat
+    - Method <khu_swcon.myanalyst.chat.ChatService.assertOwner(khu_swcon.myanalyst.report.internal.Report, java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.User.getUserid()> in (ChatService.java:206)
+  2. Dependencies of Slice user
+    - Constructor <khu_swcon.myanalyst.user.internal.User.<init>(java.lang.String, java.lang.String, java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Field <khu_swcon.myanalyst.user.internal.User$UserBuilder.reports> has generic type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Field <khu_swcon.myanalyst.user.internal.User.reports> has generic type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Method <khu_swcon.myanalyst.user.internal.User$UserBuilder.reports(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Method <khu_swcon.myanalyst.user.internal.User.getReports()> has generic return type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Method <khu_swcon.myanalyst.user.internal.User.setReports(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+  3. Dependencies of Slice report
+    - Constructor <khu_swcon.myanalyst.report.internal.Report.<init>(java.lang.Integer, khu_swcon.myanalyst.user.internal.User, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.util.UUID, java.util.List, java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Constructor <khu_swcon.myanalyst.report.web.ReportController.<init>(khu_swcon.myanalyst.report.ReportService, khu_swcon.myanalyst.dictionary.DictionaryService, khu_swcon.myanalyst.chat.ChatService)> has parameter of type <khu_swcon.myanalyst.chat.ChatService> in (ReportController.java:0)
+    - Field <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.chats> has generic type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Field <khu_swcon.myanalyst.report.internal.Report.chats> has generic type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Field <khu_swcon.myanalyst.report.web.ReportController.chatService> has type <khu_swcon.myanalyst.chat.ChatService> in (ReportController.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.chats(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report.getChats()> has generic return type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report.setChats(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.web.ReportController.getChatHistoryByReportId(java.lang.Integer, jakarta.servlet.http.HttpSession)> calls method <khu_swcon.myanalyst.chat.ChatService.getChatHistoryByReportId(java.lang.Integer, java.lang.String)> in (ReportController.java:193)
+- Cycle detected: Slice dictionary -> 
+                Slice report -> 
+                Slice dictionary
+  1. Dependencies of Slice dictionary
+    - Constructor <khu_swcon.myanalyst.dictionary.DictionaryService.<init>(khu_swcon.myanalyst.dictionary.internal.DictionaryRepository, khu_swcon.myanalyst.report.internal.ReportRepository)> has parameter of type <khu_swcon.myanalyst.report.internal.ReportRepository> in (DictionaryService.java:0)
+    - Constructor <khu_swcon.myanalyst.dictionary.internal.Dictionary.<init>(java.lang.Integer, khu_swcon.myanalyst.report.internal.Report, java.lang.String, java.lang.String)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+    - Field <khu_swcon.myanalyst.dictionary.DictionaryService.reportRepository> has type <khu_swcon.myanalyst.report.internal.ReportRepository> in (DictionaryService.java:0)
+    - Field <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.report> has type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+    - Field <khu_swcon.myanalyst.dictionary.internal.Dictionary.report> has type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+    - Method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.report(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+    - Method <khu_swcon.myanalyst.dictionary.internal.Dictionary.getReport()> has return type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+    - Method <khu_swcon.myanalyst.dictionary.internal.Dictionary.setReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+    - Method <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository.deleteByReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (DictionaryRepository.java:0)
+    - Method <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository.findByReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (DictionaryRepository.java:0)
+    - Method <khu_swcon.myanalyst.dictionary.DictionaryService.getDictionaryByReportId(java.lang.Integer, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.ReportRepository.findById(java.lang.Object)> in (DictionaryService.java:38)
+    - Method <khu_swcon.myanalyst.dictionary.DictionaryService.getDictionaryByReportId(java.lang.Integer, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.Report.getUser()> in (DictionaryService.java:40)
+  2. Dependencies of Slice report
+    - Class <khu_swcon.myanalyst.report.ReportService$1> has generic superclass <com.fasterxml.jackson.core.type.TypeReference<java.util.List<khu_swcon.myanalyst.dictionary.DomainSpecificTermDto>>> with type argument depending on <khu_swcon.myanalyst.dictionary.DomainSpecificTermDto> in (ReportService.java:0)
+    - Constructor <khu_swcon.myanalyst.report.ReportService.<init>(khu_swcon.myanalyst.report.internal.ReportRepository, khu_swcon.myanalyst.user.internal.UserRepository, khu_swcon.myanalyst.dictionary.internal.DictionaryRepository, org.springframework.web.reactive.function.client.WebClient, com.fasterxml.jackson.databind.ObjectMapper)> has parameter of type <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository> in (ReportService.java:0)
+    - Constructor <khu_swcon.myanalyst.report.internal.Report.<init>(java.lang.Integer, khu_swcon.myanalyst.user.internal.User, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.util.UUID, java.util.List, java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Constructor <khu_swcon.myanalyst.report.web.ReportController.<init>(khu_swcon.myanalyst.report.ReportService, khu_swcon.myanalyst.dictionary.DictionaryService, khu_swcon.myanalyst.chat.ChatService)> has parameter of type <khu_swcon.myanalyst.dictionary.DictionaryService> in (ReportController.java:0)
+    - Field <khu_swcon.myanalyst.report.ReportService.dictionaryRepository> has type <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository> in (ReportService.java:0)
+    - Field <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.dictionaryEntries> has generic type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Field <khu_swcon.myanalyst.report.internal.Report.dictionaryEntries> has generic type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Field <khu_swcon.myanalyst.report.web.ReportController.dictionaryService> has type <khu_swcon.myanalyst.dictionary.DictionaryService> in (ReportController.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.dictionaryEntries(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report.getDictionaryEntries()> has generic return type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report.setDictionaryEntries(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary.builder()> in (ReportService.java:174)
+    - Method <khu_swcon.myanalyst.report.web.ReportController.getDictionaryByReportId(java.lang.Integer, jakarta.servlet.http.HttpSession)> calls method <khu_swcon.myanalyst.dictionary.DictionaryService.getDictionaryByReportId(java.lang.Integer, java.lang.String)> in (ReportController.java:174)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.report(khu_swcon.myanalyst.report.internal.Report)> in (ReportService.java:175)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.DomainSpecificTermDto.getTerm()> in (ReportService.java:176)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.word(java.lang.String)> in (ReportService.java:176)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.DomainSpecificTermDto.getExplanation()> in (ReportService.java:177)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.detail(java.lang.String)> in (ReportService.java:177)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.build()> in (ReportService.java:178)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository.saveAll(java.lang.Iterable)> in (ReportService.java:184)
+- Cycle detected: Slice dictionary -> 
+                Slice user -> 
+                Slice report -> 
+                Slice dictionary
+  1. Dependencies of Slice dictionary
+    - Method <khu_swcon.myanalyst.dictionary.DictionaryService.getDictionaryByReportId(java.lang.Integer, java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.User.getUserid()> in (DictionaryService.java:40)
+  2. Dependencies of Slice user
+    - Constructor <khu_swcon.myanalyst.user.internal.User.<init>(java.lang.String, java.lang.String, java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Field <khu_swcon.myanalyst.user.internal.User$UserBuilder.reports> has generic type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Field <khu_swcon.myanalyst.user.internal.User.reports> has generic type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Method <khu_swcon.myanalyst.user.internal.User$UserBuilder.reports(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Method <khu_swcon.myanalyst.user.internal.User.getReports()> has generic return type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Method <khu_swcon.myanalyst.user.internal.User.setReports(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+  3. Dependencies of Slice report
+    - Class <khu_swcon.myanalyst.report.ReportService$1> has generic superclass <com.fasterxml.jackson.core.type.TypeReference<java.util.List<khu_swcon.myanalyst.dictionary.DomainSpecificTermDto>>> with type argument depending on <khu_swcon.myanalyst.dictionary.DomainSpecificTermDto> in (ReportService.java:0)
+    - Constructor <khu_swcon.myanalyst.report.ReportService.<init>(khu_swcon.myanalyst.report.internal.ReportRepository, khu_swcon.myanalyst.user.internal.UserRepository, khu_swcon.myanalyst.dictionary.internal.DictionaryRepository, org.springframework.web.reactive.function.client.WebClient, com.fasterxml.jackson.databind.ObjectMapper)> has parameter of type <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository> in (ReportService.java:0)
+    - Constructor <khu_swcon.myanalyst.report.internal.Report.<init>(java.lang.Integer, khu_swcon.myanalyst.user.internal.User, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.util.UUID, java.util.List, java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Constructor <khu_swcon.myanalyst.report.web.ReportController.<init>(khu_swcon.myanalyst.report.ReportService, khu_swcon.myanalyst.dictionary.DictionaryService, khu_swcon.myanalyst.chat.ChatService)> has parameter of type <khu_swcon.myanalyst.dictionary.DictionaryService> in (ReportController.java:0)
+    - Field <khu_swcon.myanalyst.report.ReportService.dictionaryRepository> has type <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository> in (ReportService.java:0)
+    - Field <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.dictionaryEntries> has generic type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Field <khu_swcon.myanalyst.report.internal.Report.dictionaryEntries> has generic type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Field <khu_swcon.myanalyst.report.web.ReportController.dictionaryService> has type <khu_swcon.myanalyst.dictionary.DictionaryService> in (ReportController.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.dictionaryEntries(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report.getDictionaryEntries()> has generic return type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report.setDictionaryEntries(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary.builder()> in (ReportService.java:174)
+    - Method <khu_swcon.myanalyst.report.web.ReportController.getDictionaryByReportId(java.lang.Integer, jakarta.servlet.http.HttpSession)> calls method <khu_swcon.myanalyst.dictionary.DictionaryService.getDictionaryByReportId(java.lang.Integer, java.lang.String)> in (ReportController.java:174)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.report(khu_swcon.myanalyst.report.internal.Report)> in (ReportService.java:175)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.DomainSpecificTermDto.getTerm()> in (ReportService.java:176)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.word(java.lang.String)> in (ReportService.java:176)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.DomainSpecificTermDto.getExplanation()> in (ReportService.java:177)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.detail(java.lang.String)> in (ReportService.java:177)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.build()> in (ReportService.java:178)
+    - Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository.saveAll(java.lang.Iterable)> in (ReportService.java:184)
+- Cycle detected: Slice report -> 
+                Slice user -> 
+                Slice report
+  1. Dependencies of Slice report
+    - Constructor <khu_swcon.myanalyst.report.ReportService.<init>(khu_swcon.myanalyst.report.internal.ReportRepository, khu_swcon.myanalyst.user.internal.UserRepository, khu_swcon.myanalyst.dictionary.internal.DictionaryRepository, org.springframework.web.reactive.function.client.WebClient, com.fasterxml.jackson.databind.ObjectMapper)> has parameter of type <khu_swcon.myanalyst.user.internal.UserRepository> in (ReportService.java:0)
+    - Constructor <khu_swcon.myanalyst.report.internal.Report.<init>(java.lang.Integer, khu_swcon.myanalyst.user.internal.User, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.util.UUID, java.util.List, java.util.List)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+    - Field <khu_swcon.myanalyst.report.ReportService.userRepository> has type <khu_swcon.myanalyst.user.internal.UserRepository> in (ReportService.java:0)
+    - Field <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.user> has type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+    - Field <khu_swcon.myanalyst.report.internal.Report.user> has type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.user(khu_swcon.myanalyst.user.internal.User)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report.getUser()> has return type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.Report.setUser(khu_swcon.myanalyst.user.internal.User)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+    - Method <khu_swcon.myanalyst.report.internal.ReportRepository.findByUser(khu_swcon.myanalyst.user.internal.User)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (ReportRepository.java:0)
+    - Method <khu_swcon.myanalyst.report.web.ReportController.createReport(khu_swcon.myanalyst.report.ReportDto, jakarta.servlet.http.HttpSession)> calls method <khu_swcon.myanalyst.user.UserNotFoundException.getMessage()> in (ReportController.java:47)
+    - Method <khu_swcon.myanalyst.report.ReportService.createReport(khu_swcon.myanalyst.report.ReportDto, java.util.UUID)> calls method <khu_swcon.myanalyst.user.internal.UserRepository.findByUserid(java.lang.String)> in (ReportService.java:68)
+    - Method <khu_swcon.myanalyst.report.ReportService.createReport(khu_swcon.myanalyst.report.ReportDto, java.util.UUID)> calls constructor <khu_swcon.myanalyst.user.UserNotFoundException.<init>(java.lang.String)> in (ReportService.java:69)
+    - Method <khu_swcon.myanalyst.report.web.ReportController.getReportsByUserId(java.lang.String, jakarta.servlet.http.HttpSession)> calls method <khu_swcon.myanalyst.user.UserNotFoundException.getMessage()> in (ReportController.java:89)
+    - Method <khu_swcon.myanalyst.report.ReportService.getAllReports(java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.UserRepository.findByUserid(java.lang.String)> in (ReportService.java:194)
+    - Method <khu_swcon.myanalyst.report.ReportService.getAllReports(java.lang.String)> calls constructor <khu_swcon.myanalyst.user.UserNotFoundException.<init>(java.lang.String)> in (ReportService.java:195)
+    - Method <khu_swcon.myanalyst.report.ReportService.getReportsByUserId(java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.UserRepository.findByUserid(java.lang.String)> in (ReportService.java:237)
+    - Method <khu_swcon.myanalyst.report.ReportService.getReportsByUserId(java.lang.String)> calls constructor <khu_swcon.myanalyst.user.UserNotFoundException.<init>(java.lang.String)> in (ReportService.java:238)
+    - Method <khu_swcon.myanalyst.report.ReportService.assertOwner(khu_swcon.myanalyst.report.internal.Report, java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.User.getUserid()> in (ReportService.java:253)
+  2. Dependencies of Slice user
+    - Constructor <khu_swcon.myanalyst.user.internal.User.<init>(java.lang.String, java.lang.String, java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Field <khu_swcon.myanalyst.user.internal.User$UserBuilder.reports> has generic type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Field <khu_swcon.myanalyst.user.internal.User.reports> has generic type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Method <khu_swcon.myanalyst.user.internal.User$UserBuilder.reports(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Method <khu_swcon.myanalyst.user.internal.User.getReports()> has generic return type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+    - Method <khu_swcon.myanalyst.user.internal.User.setReports(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+- Module 'shared' depends on non-exposed type khu_swcon.myanalyst.auth.internal.SessionAuthInterceptor within module 'auth'!
+WebConfig declares constructor WebConfig(SessionAuthInterceptor) in (WebConfig.java:0)
+- Module 'shared' depends on non-exposed type khu_swcon.myanalyst.auth.internal.SessionAuthInterceptor within module 'auth'!
+Field <khu_swcon.myanalyst.shared.web.WebConfig.sessionAuthInterceptor> has type <khu_swcon.myanalyst.auth.internal.SessionAuthInterceptor> in (WebConfig.java:0)
+- Module 'shared' depends on non-exposed type khu_swcon.myanalyst.auth.internal.SessionAuthInterceptor within module 'auth'!
+Constructor <khu_swcon.myanalyst.shared.web.WebConfig.<init>(khu_swcon.myanalyst.auth.internal.SessionAuthInterceptor)> has parameter of type <khu_swcon.myanalyst.auth.internal.SessionAuthInterceptor> in (WebConfig.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.ReportRepository within module 'report'!
+DictionaryService declares constructor @Autowired DictionaryService(DictionaryRepository, ReportRepository) in (DictionaryService.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.dictionary.DictionaryService.getDictionaryByReportId(java.lang.Integer, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.Report.getUser()> in (DictionaryService.java:40)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.ReportRepository within module 'report'!
+Method <khu_swcon.myanalyst.dictionary.DictionaryService.getDictionaryByReportId(java.lang.Integer, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.ReportRepository.findById(java.lang.Object)> in (DictionaryService.java:38)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.dictionary.DictionaryService.getDictionaryByReportId(java.lang.Integer, java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.User.getUserid()> in (DictionaryService.java:40)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.ReportRepository within module 'report'!
+Field <khu_swcon.myanalyst.dictionary.DictionaryService.reportRepository> has type <khu_swcon.myanalyst.report.internal.ReportRepository> in (DictionaryService.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.ReportRepository within module 'report'!
+Constructor <khu_swcon.myanalyst.dictionary.DictionaryService.<init>(khu_swcon.myanalyst.dictionary.internal.DictionaryRepository, khu_swcon.myanalyst.report.internal.ReportRepository)> has parameter of type <khu_swcon.myanalyst.report.internal.ReportRepository> in (DictionaryService.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.setReport(Report) in (Dictionary.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares return type Report.getReport() in (Dictionary.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Field <khu_swcon.myanalyst.dictionary.internal.Dictionary.report> has type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.dictionary.internal.Dictionary.getReport()> has return type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.dictionary.internal.Dictionary.setReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Constructor <khu_swcon.myanalyst.dictionary.internal.Dictionary.<init>(java.lang.Integer, khu_swcon.myanalyst.report.internal.Report, java.lang.String, java.lang.String)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.report(Report) in (Dictionary.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Field <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.report> has type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.report(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Dictionary.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.deleteByReport(Report) in (DictionaryRepository.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.findByReport(Report) in (DictionaryRepository.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository.deleteByReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (DictionaryRepository.java:0)
+- Module 'dictionary' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository.findByReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (DictionaryRepository.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.ReportRepository within module 'report'!
+ChatService declares constructor @Autowired ChatService(ChatRepository, ReportRepository, WebClient) in (ChatService.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.assertOwner(Report, String) in (ChatService.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.chat.ChatService.assertOwner(khu_swcon.myanalyst.report.internal.Report, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.Report.getUser()> in (ChatService.java:206)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.chat.ChatService.assertOwner(khu_swcon.myanalyst.report.internal.Report, java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.User.getUserid()> in (ChatService.java:206)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.ReportRepository within module 'report'!
+Method <khu_swcon.myanalyst.chat.ChatService.getChatHistoryByReportId(java.lang.Integer, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.ReportRepository.findById(java.lang.Object)> in (ChatService.java:106)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.chat.ChatService.processChat(khu_swcon.myanalyst.chat.ChatRequestDto, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.Report.getContent()> in (ChatService.java:58)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.ReportRepository within module 'report'!
+Method <khu_swcon.myanalyst.chat.ChatService.processChat(khu_swcon.myanalyst.chat.ChatRequestDto, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.ReportRepository.findById(java.lang.Object)> in (ChatService.java:52)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.chat.ChatService.processSttChat(khu_swcon.myanalyst.chat.ChatSttRequestDto, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.Report.getContent()> in (ChatService.java:139)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.ReportRepository within module 'report'!
+Method <khu_swcon.myanalyst.chat.ChatService.processSttChat(khu_swcon.myanalyst.chat.ChatSttRequestDto, java.lang.String)> calls method <khu_swcon.myanalyst.report.internal.ReportRepository.findById(java.lang.Object)> in (ChatService.java:132)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.ReportRepository within module 'report'!
+Field <khu_swcon.myanalyst.chat.ChatService.reportRepository> has type <khu_swcon.myanalyst.report.internal.ReportRepository> in (ChatService.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.chat.ChatService.assertOwner(khu_swcon.myanalyst.report.internal.Report, java.lang.String)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (ChatService.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.ReportRepository within module 'report'!
+Constructor <khu_swcon.myanalyst.chat.ChatService.<init>(khu_swcon.myanalyst.chat.internal.ChatRepository, khu_swcon.myanalyst.report.internal.ReportRepository, org.springframework.web.reactive.function.client.WebClient)> has parameter of type <khu_swcon.myanalyst.report.internal.ReportRepository> in (ChatService.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.setReport(Report) in (Chat.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares return type Report.getReport() in (Chat.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Field <khu_swcon.myanalyst.chat.internal.Chat.report> has type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.chat.internal.Chat.getReport()> has return type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.chat.internal.Chat.setReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Constructor <khu_swcon.myanalyst.chat.internal.Chat.<init>(java.lang.Integer, khu_swcon.myanalyst.report.internal.Report, java.lang.String, java.lang.String)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.report(Report) in (Chat.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Field <khu_swcon.myanalyst.chat.internal.Chat$ChatBuilder.report> has type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.chat.internal.Chat$ChatBuilder.report(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (Chat.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.findByReport(Report) in (ChatRepository.java:0)
+- Module 'chat' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.chat.internal.ChatRepository.findByReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (ChatRepository.java:0)
+- Module 'user' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Field <khu_swcon.myanalyst.user.internal.User.reports> has generic type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+- Module 'user' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.user.internal.User.getReports()> has generic return type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+- Module 'user' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.user.internal.User.setReports(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+- Module 'user' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Constructor <khu_swcon.myanalyst.user.internal.User.<init>(java.lang.String, java.lang.String, java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+- Module 'user' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Field <khu_swcon.myanalyst.user.internal.User$UserBuilder.reports> has generic type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+- Module 'user' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.user.internal.User$UserBuilder.reports(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.report.internal.Report>> with type argument depending on <khu_swcon.myanalyst.report.internal.Report> in (User.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.UserRepository within module 'user'!
+ReportService declares constructor @Autowired ReportService(ReportRepository, UserRepository, DictionaryRepository, WebClient, ObjectMapper) in (ReportService.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.DictionaryRepository within module 'dictionary'!
+ReportService declares constructor @Autowired ReportService(ReportRepository, UserRepository, DictionaryRepository, WebClient, ObjectMapper) in (ReportService.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.UserRepository within module 'user'!
+Method <khu_swcon.myanalyst.report.ReportService.createReport(khu_swcon.myanalyst.report.ReportDto, java.util.UUID)> calls method <khu_swcon.myanalyst.user.internal.UserRepository.findByUserid(java.lang.String)> in (ReportService.java:68)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.UserRepository within module 'user'!
+Method <khu_swcon.myanalyst.report.ReportService.getReportsByUserId(java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.UserRepository.findByUserid(java.lang.String)> in (ReportService.java:237)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder within module 'dictionary'!
+Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.detail(java.lang.String)> in (ReportService.java:177)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder within module 'dictionary'!
+Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.build()> in (ReportService.java:178)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder within module 'dictionary'!
+Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.word(java.lang.String)> in (ReportService.java:176)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary within module 'dictionary'!
+Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary.builder()> in (ReportService.java:174)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.DictionaryRepository within module 'dictionary'!
+Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository.saveAll(java.lang.Iterable)> in (ReportService.java:184)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder within module 'dictionary'!
+Method <khu_swcon.myanalyst.report.ReportService.saveDomainSpecificTerms(khu_swcon.myanalyst.report.internal.Report, java.lang.Object)> calls method <khu_swcon.myanalyst.dictionary.internal.Dictionary$DictionaryBuilder.report(khu_swcon.myanalyst.report.internal.Report)> in (ReportService.java:175)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.UserRepository within module 'user'!
+Method <khu_swcon.myanalyst.report.ReportService.getAllReports(java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.UserRepository.findByUserid(java.lang.String)> in (ReportService.java:194)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.report.ReportService.assertOwner(khu_swcon.myanalyst.report.internal.Report, java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.User.getUserid()> in (ReportService.java:253)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.DictionaryRepository within module 'dictionary'!
+Field <khu_swcon.myanalyst.report.ReportService.dictionaryRepository> has type <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository> in (ReportService.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.UserRepository within module 'user'!
+Field <khu_swcon.myanalyst.report.ReportService.userRepository> has type <khu_swcon.myanalyst.user.internal.UserRepository> in (ReportService.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.UserRepository within module 'user'!
+Constructor <khu_swcon.myanalyst.report.ReportService.<init>(khu_swcon.myanalyst.report.internal.ReportRepository, khu_swcon.myanalyst.user.internal.UserRepository, khu_swcon.myanalyst.dictionary.internal.DictionaryRepository, org.springframework.web.reactive.function.client.WebClient, com.fasterxml.jackson.databind.ObjectMapper)> has parameter of type <khu_swcon.myanalyst.user.internal.UserRepository> in (ReportService.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.DictionaryRepository within module 'dictionary'!
+Constructor <khu_swcon.myanalyst.report.ReportService.<init>(khu_swcon.myanalyst.report.internal.ReportRepository, khu_swcon.myanalyst.user.internal.UserRepository, khu_swcon.myanalyst.dictionary.internal.DictionaryRepository, org.springframework.web.reactive.function.client.WebClient, com.fasterxml.jackson.databind.ObjectMapper)> has parameter of type <khu_swcon.myanalyst.dictionary.internal.DictionaryRepository> in (ReportService.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+User declares parameter User.setUser(User) in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+User declares return type User.getUser() in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary within module 'dictionary'!
+Field <khu_swcon.myanalyst.report.internal.Report.dictionaryEntries> has generic type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Field <khu_swcon.myanalyst.report.internal.Report.user> has type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.chat.internal.Chat within module 'chat'!
+Field <khu_swcon.myanalyst.report.internal.Report.chats> has generic type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.chat.internal.Chat within module 'chat'!
+Method <khu_swcon.myanalyst.report.internal.Report.getChats()> has generic return type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.report.internal.Report.getUser()> has return type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary within module 'dictionary'!
+Method <khu_swcon.myanalyst.report.internal.Report.getDictionaryEntries()> has generic return type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.report.internal.Report.setUser(khu_swcon.myanalyst.user.internal.User)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.chat.internal.Chat within module 'chat'!
+Method <khu_swcon.myanalyst.report.internal.Report.setChats(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary within module 'dictionary'!
+Method <khu_swcon.myanalyst.report.internal.Report.setDictionaryEntries(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Constructor <khu_swcon.myanalyst.report.internal.Report.<init>(java.lang.Integer, khu_swcon.myanalyst.user.internal.User, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.util.UUID, java.util.List, java.util.List)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary within module 'dictionary'!
+Constructor <khu_swcon.myanalyst.report.internal.Report.<init>(java.lang.Integer, khu_swcon.myanalyst.user.internal.User, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.util.UUID, java.util.List, java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.chat.internal.Chat within module 'chat'!
+Constructor <khu_swcon.myanalyst.report.internal.Report.<init>(java.lang.Integer, khu_swcon.myanalyst.user.internal.User, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.util.UUID, java.util.List, java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+User declares parameter User.user(User) in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Field <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.user> has type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.chat.internal.Chat within module 'chat'!
+Field <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.chats> has generic type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary within module 'dictionary'!
+Field <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.dictionaryEntries> has generic type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.user(khu_swcon.myanalyst.user.internal.User)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.chat.internal.Chat within module 'chat'!
+Method <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.chats(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.chat.internal.Chat>> with type argument depending on <khu_swcon.myanalyst.chat.internal.Chat> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.dictionary.internal.Dictionary within module 'dictionary'!
+Method <khu_swcon.myanalyst.report.internal.Report$ReportBuilder.dictionaryEntries(java.util.List)> has generic parameter type <java.util.List<khu_swcon.myanalyst.dictionary.internal.Dictionary>> with type argument depending on <khu_swcon.myanalyst.dictionary.internal.Dictionary> in (Report.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+User declares parameter User.findByUser(User) in (ReportRepository.java:0)
+- Module 'report' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.report.internal.ReportRepository.findByUser(khu_swcon.myanalyst.user.internal.User)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (ReportRepository.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.generation.ReportJobResponseDto.from(khu_swcon.myanalyst.generation.internal.ReportJob)> calls method <khu_swcon.myanalyst.report.internal.Report.getReportid()> in (ReportJobResponseDto.java:33)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.UserRepository within module 'user'!
+ReportJobService declares constructor ReportJobService(ReportJobRepository, ReportJobAttemptRepository, OutboxEventRepository, UserRepository, ReportService, ExecutorService, TransactionTemplate, ReportJobMetrics, int, long, int) in (ReportJobService.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.markSucceeded(UUID, Report) in (ReportJobService.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.UserRepository within module 'user'!
+Method <khu_swcon.myanalyst.generation.ReportJobService.createJob(khu_swcon.myanalyst.generation.ReportJobRequestDto, java.lang.String, java.lang.String)> calls method <khu_swcon.myanalyst.user.internal.UserRepository.findByUserid(java.lang.String)> in (ReportJobService.java:100)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.generation.ReportJobService.requestFor(java.util.UUID)> calls method <khu_swcon.myanalyst.user.internal.User.getUserid()> in (ReportJobService.java:340)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.UserRepository within module 'user'!
+Field <khu_swcon.myanalyst.generation.ReportJobService.userRepository> has type <khu_swcon.myanalyst.user.internal.UserRepository> in (ReportJobService.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.generation.ReportJobService.markSucceeded(java.util.UUID, khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (ReportJobService.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.UserRepository within module 'user'!
+Constructor <khu_swcon.myanalyst.generation.ReportJobService.<init>(khu_swcon.myanalyst.generation.internal.ReportJobRepository, khu_swcon.myanalyst.generation.internal.ReportJobAttemptRepository, khu_swcon.myanalyst.generation.internal.OutboxEventRepository, khu_swcon.myanalyst.user.internal.UserRepository, khu_swcon.myanalyst.report.ReportService, java.util.concurrent.ExecutorService, org.springframework.transaction.support.TransactionTemplate, khu_swcon.myanalyst.generation.internal.ReportJobMetrics, int, long, int)> has parameter of type <khu_swcon.myanalyst.user.internal.UserRepository> in (ReportJobService.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+User declares parameter User.setUser(User) in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.setReport(Report) in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares return type Report.getReport() in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+User declares return type User.getUser() in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Field <khu_swcon.myanalyst.generation.internal.ReportJob.user> has type <khu_swcon.myanalyst.user.internal.User> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Field <khu_swcon.myanalyst.generation.internal.ReportJob.report> has type <khu_swcon.myanalyst.report.internal.Report> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.generation.internal.ReportJob.getUser()> has return type <khu_swcon.myanalyst.user.internal.User> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.generation.internal.ReportJob.getReport()> has return type <khu_swcon.myanalyst.report.internal.Report> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.generation.internal.ReportJob.setUser(khu_swcon.myanalyst.user.internal.User)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.generation.internal.ReportJob.setReport(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Constructor <khu_swcon.myanalyst.generation.internal.ReportJob.<init>(java.util.UUID, khu_swcon.myanalyst.user.internal.User, java.lang.String, java.lang.String, khu_swcon.myanalyst.generation.ReportJobStatus, int, java.lang.String, int, int, java.time.Instant, java.time.Instant, java.lang.String, khu_swcon.myanalyst.report.internal.Report, java.time.Instant, java.time.Instant, java.lang.Long, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Constructor <khu_swcon.myanalyst.generation.internal.ReportJob.<init>(java.util.UUID, khu_swcon.myanalyst.user.internal.User, java.lang.String, java.lang.String, khu_swcon.myanalyst.generation.ReportJobStatus, int, java.lang.String, int, int, java.time.Instant, java.time.Instant, java.lang.String, khu_swcon.myanalyst.report.internal.Report, java.time.Instant, java.time.Instant, java.lang.Long, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+User declares parameter User.user(User) in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Report declares parameter Report.report(Report) in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Field <khu_swcon.myanalyst.generation.internal.ReportJob$ReportJobBuilder.report> has type <khu_swcon.myanalyst.report.internal.Report> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Field <khu_swcon.myanalyst.generation.internal.ReportJob$ReportJobBuilder.user> has type <khu_swcon.myanalyst.user.internal.User> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.user.internal.User within module 'user'!
+Method <khu_swcon.myanalyst.generation.internal.ReportJob$ReportJobBuilder.user(khu_swcon.myanalyst.user.internal.User)> has parameter of type <khu_swcon.myanalyst.user.internal.User> in (ReportJob.java:0)
+- Module 'generation' depends on non-exposed type khu_swcon.myanalyst.report.internal.Report within module 'report'!
+Method <khu_swcon.myanalyst.generation.internal.ReportJob$ReportJobBuilder.report(khu_swcon.myanalyst.report.internal.Report)> has parameter of type <khu_swcon.myanalyst.report.internal.Report> in (ReportJob.java:0)
