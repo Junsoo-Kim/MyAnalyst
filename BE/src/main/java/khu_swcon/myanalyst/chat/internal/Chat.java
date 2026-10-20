@@ -1,6 +1,5 @@
 package khu_swcon.myanalyst.chat.internal;
 
-import khu_swcon.myanalyst.report.internal.Report;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -22,9 +21,9 @@ public class Chat {
     @Column(name = "chatid")
     private Integer chatid;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "reportid") // DB에서 ON DELETE CASCADE 설정됨
-    private Report report;
+    // 보고서 모듈의 엔티티 대신 ID만 보관한다. 보고서 삭제는 ReportDeleted 이벤트로 정리한다.
+    @Column(name = "reportid")
+    private Integer reportId;
 
     @Column(name = "question", columnDefinition = "TEXT")
     private String question;

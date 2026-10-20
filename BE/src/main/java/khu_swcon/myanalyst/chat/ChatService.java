@@ -1,20 +1,15 @@
 package khu_swcon.myanalyst.chat;
 
-import khu_swcon.myanalyst.chat.ChatRequestDto;
-import khu_swcon.myanalyst.chat.ChatResponseDto;
-import khu_swcon.myanalyst.chat.ChatHistoryDto;
-import khu_swcon.myanalyst.chat.ChatSttRequestDto;
-import khu_swcon.myanalyst.chat.ChatSttResponseDto;
 import khu_swcon.myanalyst.chat.internal.Chat;
-import khu_swcon.myanalyst.report.internal.Report;
-import khu_swcon.myanalyst.shared.ApiException;
 import khu_swcon.myanalyst.chat.internal.ChatRepository;
-import khu_swcon.myanalyst.report.internal.ReportRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import khu_swcon.myanalyst.report.ReportDeleted;
+import khu_swcon.myanalyst.report.ReportService;
+import khu_swcon.myanalyst.shared.ApiException;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.BodyInserters;
@@ -28,36 +23,33 @@ import java.util.stream.Collectors;
 
 @Service
 public class ChatService {
-    
+
     private final ChatRepository chatRepository;
-    private final ReportRepository reportRepository;
+    private final ReportService reportService;
     private final WebClient webClient;
 
-    @Autowired
-    public ChatService(ChatRepository chatRepository, ReportRepository reportRepository, WebClient ragWebClient) {
+    public ChatService(ChatRepository chatRepository, ReportService reportService, WebClient ragWebClient) {
         this.chatRepository = chatRepository;
-        this.reportRepository = reportRepository;
+        this.reportService = reportService;
         this.webClient = ragWebClient;
     }
-    
+
     /**
      * 사용자 질문에 대한 답변을 생성하고 저장
-     * 
+     *
      * @param chatRequestDto 채팅 요청 정보
      * @return 생성된 답변
      */
     @Transactional
     public ChatResponseDto processChat(ChatRequestDto chatRequestDto, String userId) {
-        // 1. 리포트 존재 여부 확인
-        Report report = reportRepository.findById(chatRequestDto.getReportid())
-                .orElseThrow(() -> new ApiException("Report not found with ID: " + chatRequestDto.getReportid(), HttpStatus.NOT_FOUND));
-        assertOwner(report, userId);
-        
+        // 1. 리포트 소유권 확인 및 본문 조회
+        String reportContent = reportService.getOwnedReportContent(chatRequestDto.getReportid(), userId);
+
         // 2. 외부 API 호출하여 답변 생성
         Map<String, String> requestBody = new HashMap<>();
-        requestBody.put("report", report.getContent());
+        requestBody.put("report", reportContent);
         requestBody.put("question", chatRequestDto.getQuestion());
-        
+
         try {
             Map<String, Object> response = webClient.post()
                     .uri("/questions")
@@ -66,52 +58,47 @@ public class ChatService {
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block(); // 동기적으로 응답 대기
-            
+
             if (response == null || !response.containsKey("answer")) {
                 throw new ApiException("답변 생성 API 호출 결과가 유효하지 않습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
             }
-            
+
             String answer = (String) response.get("answer");
-            
+
             // 3. Chat 엔티티 생성 및 저장
             Chat chat = Chat.builder()
-                    .report(report)
+                    .reportId(chatRequestDto.getReportid())
                     .question(chatRequestDto.getQuestion())
                     .answer(answer)
                     .build();
-            
+
             chatRepository.save(chat);
-            
+
             // 4. 응답 생성
             return ChatResponseDto.builder()
                     .answer(answer)
                     .build();
-            
+
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
             throw new ApiException("답변 생성 중 오류 발생: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-    
+
     /**
      * 리포트 ID로 채팅 기록을 조회
-     * 
+     *
      * @param reportId 리포트 ID
      * @return 채팅 기록 목록
      */
     @Transactional(readOnly = true)
     public List<ChatHistoryDto> getChatHistoryByReportId(Integer reportId, String userId) {
-        // 1. 리포트 존재 여부 확인
-        Report report = reportRepository.findById(reportId)
-                .orElseThrow(() -> new ApiException("Report not found with ID: " + reportId, HttpStatus.NOT_FOUND));
-        assertOwner(report, userId);
-        
-        // 2. 채팅 기록 조회
-        List<Chat> chats = chatRepository.findByReport(report);
-        
-        // 3. 응답 생성
-        return chats.stream()
+        // 1. 리포트 소유권 확인
+        reportService.assertOwnedBy(reportId, userId);
+
+        // 2. 채팅 기록 조회 및 응답 생성
+        return chatRepository.findByReportId(reportId).stream()
                 .map(chat -> ChatHistoryDto.builder()
                         .chatid(chat.getChatid())
                         .question(chat.getQuestion())
@@ -119,42 +106,40 @@ public class ChatService {
                         .build())
                 .collect(Collectors.toList());
     }
-    
+
     /**
      * 음성 파일에서 추출한 질문에 대한 답변을 생성하고 저장
-     * 
+     *
      * @param chatSttRequestDto 음성 채팅 요청 정보
      * @return 생성된 질문과 답변
      */
     @Transactional
     public ChatSttResponseDto processSttChat(ChatSttRequestDto chatSttRequestDto, String userId) {
-        // 1. 리포트 존재 여부 확인
-        Report report = reportRepository.findById(chatSttRequestDto.getReportid())
-                .orElseThrow(() -> new ApiException("Report not found with ID: " + chatSttRequestDto.getReportid(), HttpStatus.NOT_FOUND));
-        assertOwner(report, userId);
-        
+        // 1. 리포트 소유권 확인 및 본문 조회
+        String reportContent = reportService.getOwnedReportContent(chatSttRequestDto.getReportid(), userId);
+
         try {
             // 2. 외부 API 호출을 위한 멀티파트 요청 구성
             MultipartBodyBuilder builder = new MultipartBodyBuilder();
-            builder.part("report", report.getContent());
-            
+            builder.part("report", reportContent);
+
             // 음성 파일 처리 - 디버그 로그 추가
             if (chatSttRequestDto.getAudio_file() != null) {
                 System.out.println("Audio file name: " + chatSttRequestDto.getAudio_file().getOriginalFilename());
                 System.out.println("Audio file size: " + chatSttRequestDto.getAudio_file().getSize());
                 System.out.println("Audio file content type: " + chatSttRequestDto.getAudio_file().getContentType());
-                
+
                 try {
                     byte[] audioFileBytes = chatSttRequestDto.getAudio_file().getBytes();
                     // 파일 확장자 확인
                     String originalFilename = chatSttRequestDto.getAudio_file().getOriginalFilename();
                     String filename = originalFilename != null ? originalFilename : "audio.m4a";
-                    
+
                     // 모든 오디오 파일 타입을 허용
                     builder.part("audio_file", new ByteArrayResource(audioFileBytes))
                            .filename(filename)
-                           .contentType(MediaType.parseMediaType(chatSttRequestDto.getAudio_file().getContentType() != null 
-                                                                ? chatSttRequestDto.getAudio_file().getContentType() 
+                           .contentType(MediaType.parseMediaType(chatSttRequestDto.getAudio_file().getContentType() != null
+                                                                ? chatSttRequestDto.getAudio_file().getContentType()
                                                                 : "audio/mp4"));
                 } catch (IOException e) {
                     throw new ApiException("Failed to process audio file: " + e.getMessage(), HttpStatus.BAD_REQUEST);
@@ -162,7 +147,7 @@ public class ChatService {
             } else {
                 throw new ApiException("Audio file is required", HttpStatus.BAD_REQUEST);
             }
-            
+
             // 3. 외부 API 호출
             Map<String, Object> response = webClient.post()
                     .uri("/questions/stt")
@@ -171,29 +156,29 @@ public class ChatService {
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
-            
+
             if (response == null || !response.containsKey("answer") || !response.containsKey("question")) {
                 throw new ApiException("STT 답변 생성 API 호출 결과가 유효하지 않습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
             }
-            
+
             String question = (String) response.get("question");
             String answer = (String) response.get("answer");
-            
+
             // 4. Chat 엔티티 생성 및 저장
             Chat chat = Chat.builder()
-                    .report(report)
+                    .reportId(chatSttRequestDto.getReportid())
                     .question(question)
                     .answer(answer)
                     .build();
-            
+
             chatRepository.save(chat);
-            
+
             // 5. 응답 생성
             return ChatSttResponseDto.builder()
                     .question(question)
                     .answer(answer)
                     .build();
-            
+
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
@@ -202,9 +187,9 @@ public class ChatService {
         }
     }
 
-    private void assertOwner(Report report, String userId) {
-        if (!report.getUser().getUserid().equals(userId)) {
-            throw new ApiException("You do not have access to this report", HttpStatus.FORBIDDEN);
-        }
+    /** 보고서가 삭제되면 커밋 이후 별도 트랜잭션에서 그 보고서의 채팅 기록을 지운다. */
+    @ApplicationModuleListener
+    public void on(ReportDeleted event) {
+        chatRepository.deleteByReportId(event.reportId());
     }
 }

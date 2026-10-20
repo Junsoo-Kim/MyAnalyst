@@ -54,7 +54,7 @@ class ReportJobConcurrencyIT {
         Instant now = Instant.now();
         ReportJob job = ReportJob.builder()
                 .jobId(UUID.randomUUID())
-                .user(user)
+                .userId(user.getUserid())
                 .idempotencyKey("concurrency-test-key-" + UUID.randomUUID())
                 .traceId("trace-1")
                 .status(ReportJobStatus.QUEUED)

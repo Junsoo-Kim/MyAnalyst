@@ -30,7 +30,7 @@ public class ReportJobResponseDto {
                 .progress(job.getProgress())
                 .message(job.getProgressMessage())
                 .attemptCount(job.getAttemptCount())
-                .reportId(job.getReport() == null ? null : job.getReport().getReportid())
+                .reportId(job.getReportId())
                 .error(job.getStatus() == ReportJobStatus.FAILED ? job.getLastError() : null)
                 .createdAt(job.getCreatedAt())
                 .updatedAt(job.getUpdatedAt())

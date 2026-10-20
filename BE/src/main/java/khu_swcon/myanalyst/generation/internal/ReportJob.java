@@ -1,8 +1,6 @@
 package khu_swcon.myanalyst.generation.internal;
 
 import khu_swcon.myanalyst.generation.ReportJobStatus;
-import khu_swcon.myanalyst.report.internal.Report;
-import khu_swcon.myanalyst.user.internal.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,9 +21,9 @@ public class ReportJob {
     @Column(name = "job_id", nullable = false, updatable = false)
     private UUID jobId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "userid", nullable = false)
-    private User user;
+    // 다른 모듈의 엔티티 대신 ID만 보관한다. 모듈(이후 서비스) 사이에는 FK를 두지 않는다.
+    @Column(name = "userid", nullable = false, length = 20)
+    private String userId;
 
     @Column(name = "idempotency_key", nullable = false, length = 128)
     private String idempotencyKey;
@@ -58,9 +56,8 @@ public class ReportJob {
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "report_id")
-    private Report report;
+    @Column(name = "report_id")
+    private Integer reportId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

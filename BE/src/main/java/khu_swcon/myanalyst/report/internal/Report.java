@@ -1,8 +1,5 @@
 package khu_swcon.myanalyst.report.internal;
 
-import khu_swcon.myanalyst.chat.internal.Chat;
-import khu_swcon.myanalyst.dictionary.internal.Dictionary;
-import khu_swcon.myanalyst.user.internal.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -10,8 +7,6 @@ import lombok.Builder;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -28,9 +23,9 @@ public class Report {
     @Column(name = "reportid")
     private Integer reportid;
 
-    @ManyToOne(fetch = FetchType.LAZY) // 지연 로딩이 성능에 유리할 수 있음
-    @JoinColumn(name = "userid", nullable = false)
-    private User user;
+    // 사용자 모듈의 엔티티 대신 ID만 보관한다. 모듈(이후 서비스) 사이에는 FK를 두지 않는다.
+    @Column(name = "userid", nullable = false, length = 20)
+    private String userId;
 
     @Column(name = "title", nullable = false, columnDefinition = "TEXT")
     private String title;
@@ -52,10 +47,4 @@ public class Report {
 
     @Column(name = "generation_job_id", unique = true)
     private UUID generationJobId;
-
-    @OneToMany(mappedBy = "report")
-    private List<Dictionary> dictionaryEntries = new ArrayList<>();
-
-    @OneToMany(mappedBy = "report", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Chat> chats = new ArrayList<>();
 }

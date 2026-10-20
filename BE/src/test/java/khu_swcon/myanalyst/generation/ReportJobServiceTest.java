@@ -1,24 +1,20 @@
 package khu_swcon.myanalyst.generation;
 
-import khu_swcon.myanalyst.generation.ReportJobRequestDto;
-import khu_swcon.myanalyst.generation.ReportJobResponseDto;
-import khu_swcon.myanalyst.generation.internal.*;
-import khu_swcon.myanalyst.report.internal.Report;
-import khu_swcon.myanalyst.user.internal.User;
+import khu_swcon.myanalyst.generation.internal.RagReportClient;
+import khu_swcon.myanalyst.generation.internal.ReportGenerationRequested;
+import khu_swcon.myanalyst.generation.internal.ReportJob;
+import khu_swcon.myanalyst.generation.internal.ReportJobAttemptRepository;
+import khu_swcon.myanalyst.generation.internal.ReportJobMetrics;
+import khu_swcon.myanalyst.generation.internal.ReportJobRepository;
 import khu_swcon.myanalyst.report.ReportService;
 import khu_swcon.myanalyst.shared.ApiException;
-import khu_swcon.myanalyst.generation.internal.ReportJobMetrics;
-import khu_swcon.myanalyst.generation.internal.OutboxEventRepository;
-import khu_swcon.myanalyst.generation.internal.ReportJobAttemptRepository;
-import khu_swcon.myanalyst.generation.internal.ReportJobRepository;
-import khu_swcon.myanalyst.user.internal.UserRepository;
-import org.junit.jupiter.api.AfterEach;
+import khu_swcon.myanalyst.user.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
@@ -32,32 +28,34 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.*;
 
 class ReportJobServiceTest {
     private static final int MAX_ATTEMPTS = 3;
-    private static final int OUTBOX_MAX_ATTEMPTS = 3;
 
     private ReportJobRepository jobRepository;
     private ReportJobAttemptRepository attemptRepository;
-    private OutboxEventRepository outboxEventRepository;
-    private UserRepository userRepository;
+    private UserService userService;
     private ReportService reportService;
+    private RagReportClient ragReportClient;
     private ExecutorService reportJobExecutor;
     private TransactionTemplate transactionTemplate;
     private ReportJobMetrics reportJobMetrics;
+    private ApplicationEventPublisher events;
     private ReportJobService service;
 
     @BeforeEach
     void setUp() {
         jobRepository = mock(ReportJobRepository.class);
         attemptRepository = mock(ReportJobAttemptRepository.class);
-        outboxEventRepository = mock(OutboxEventRepository.class);
-        userRepository = mock(UserRepository.class);
+        userService = mock(UserService.class);
         reportService = mock(ReportService.class);
+        ragReportClient = mock(RagReportClient.class);
         reportJobExecutor = mock(ExecutorService.class);
         transactionTemplate = mock(TransactionTemplate.class);
         reportJobMetrics = mock(ReportJobMetrics.class);
+        events = mock(ApplicationEventPublisher.class);
 
         TransactionStatus status = mock(TransactionStatus.class);
         when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
@@ -73,22 +71,9 @@ class ReportJobServiceTest {
         when(attemptRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         service = new ReportJobService(
-                jobRepository, attemptRepository, outboxEventRepository, userRepository,
-                reportService, reportJobExecutor, transactionTemplate, reportJobMetrics,
-                MAX_ATTEMPTS, 300, OUTBOX_MAX_ATTEMPTS);
-
-        TransactionSynchronizationManager.initSynchronization();
-    }
-
-    @AfterEach
-    void tearDown() {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
-    }
-
-    private User user(String userid) {
-        return User.builder().userid(userid).build();
+                jobRepository, attemptRepository, userService, reportService, ragReportClient,
+                reportJobExecutor, transactionTemplate, reportJobMetrics, events,
+                MAX_ATTEMPTS, 300);
     }
 
     private ReportJobRequestDto request() {
@@ -102,6 +87,21 @@ class ReportJobServiceTest {
         return dto;
     }
 
+    private ReportJob queuedJob(UUID jobId) {
+        return ReportJob.builder()
+                .jobId(jobId).userId("u1").status(ReportJobStatus.QUEUED)
+                .attemptCount(0).maxAttempts(MAX_ATTEMPTS).nextAttemptAt(Instant.now().minusSeconds(1))
+                .traceId("t").title("t").company("c").date("d")
+                .createdAt(Instant.now()).updatedAt(Instant.now()).build();
+    }
+
+    private void runSubmittedTasksInline() {
+        when(reportJobExecutor.submit(any(Runnable.class))).thenAnswer(invocation -> {
+            ((Runnable) invocation.getArgument(0)).run();
+            return null;
+        });
+    }
+
     @Test
     void enqueue_requiresIdempotencyKey() {
         assertThatThrownBy(() -> service.enqueue(request(), "u1", ""))
@@ -112,164 +112,99 @@ class ReportJobServiceTest {
     @Test
     void enqueue_returnsExistingJob_onDuplicateIdempotencyKey() {
         ReportJob existing = ReportJob.builder()
-                .jobId(UUID.randomUUID()).user(user("u1")).status(ReportJobStatus.QUEUED)
+                .jobId(UUID.randomUUID()).userId("u1").status(ReportJobStatus.QUEUED)
                 .traceId("t").createdAt(Instant.now()).updatedAt(Instant.now()).build();
-        when(jobRepository.findByUser_UseridAndIdempotencyKey("u1", "key-1")).thenReturn(Optional.of(existing));
+        when(jobRepository.findByUserIdAndIdempotencyKey("u1", "key-1")).thenReturn(Optional.of(existing));
 
         ReportJobResponseDto response = service.enqueue(request(), "u1", "key-1");
 
         assertThat(response.getJobId()).isEqualTo(existing.getJobId());
         verify(jobRepository, never()).saveAndFlush(any());
-        verify(outboxEventRepository, never()).save(any());
+        verify(events, never()).publishEvent(isA(ReportGenerationRequested.class));
     }
 
     @Test
-    void enqueue_createsJobAndOutboxEvent_onFirstRequest() {
-        when(jobRepository.findByUser_UseridAndIdempotencyKey("u1", "key-1")).thenReturn(Optional.empty());
-        when(userRepository.findByUserid("u1")).thenReturn(Optional.of(user("u1")));
+    void enqueue_createsJobAndPublishesGenerationRequest_onFirstRequest() {
+        when(jobRepository.findByUserIdAndIdempotencyKey("u1", "key-1")).thenReturn(Optional.empty());
+        when(userService.exists("u1")).thenReturn(true);
         when(jobRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         ReportJobResponseDto response = service.enqueue(request(), "u1", "key-1");
 
         assertThat(response.getStatus()).isEqualTo(ReportJobStatus.QUEUED);
-        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
-        verify(outboxEventRepository).save(captor.capture());
-        assertThat(captor.getValue().getEventType()).isEqualTo("REPORT_REQUESTED");
-        assertThat(captor.getValue().getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+        ArgumentCaptor<ReportGenerationRequested> captor = ArgumentCaptor.forClass(ReportGenerationRequested.class);
+        verify(events).publishEvent(captor.capture());
+        assertThat(captor.getValue().jobId()).isEqualTo(response.getJobId());
     }
 
     @Test
-    void relayOutboxEvents_dispatchesAndExecutesJobExactlyOnce() {
+    void generationRequested_dispatchesAndExecutesJobExactlyOnce() {
         UUID jobId = UUID.randomUUID();
-        UUID eventId = UUID.randomUUID();
-        ReportJob job = ReportJob.builder()
-                .jobId(jobId).user(user("u1")).status(ReportJobStatus.QUEUED)
-                .attemptCount(0).maxAttempts(MAX_ATTEMPTS).nextAttemptAt(Instant.now().minusSeconds(1))
-                .traceId("t").title("t").company("c").date("d")
-                .createdAt(Instant.now()).updatedAt(Instant.now()).build();
-        OutboxEvent event = OutboxEvent.builder()
-                .eventId(eventId).aggregateId(jobId).eventType("REPORT_REQUESTED")
-                .payload("{}").status(OutboxEventStatus.PENDING).attemptCount(0)
-                .availableAt(Instant.now().minusSeconds(1)).createdAt(Instant.now()).build();
-
-        when(outboxEventRepository.findTop10ByStatusAndAvailableAtLessThanEqualOrderByCreatedAtAsc(eq(OutboxEventStatus.PENDING), any()))
-                .thenReturn(List.of(event));
-        when(outboxEventRepository.findTop10ByStatusAndLeaseExpiresAtLessThanOrderByCreatedAtAsc(eq(OutboxEventStatus.PROCESSING), any()))
-                .thenReturn(List.of());
-        when(jobRepository.findTop10ByStatusAndLeaseExpiresAtLessThanOrderByCreatedAtAsc(eq(ReportJobStatus.RUNNING), any()))
-                .thenReturn(List.of());
-        when(outboxEventRepository.findWithLockByEventId(eventId)).thenReturn(Optional.of(event));
-        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        ReportJob job = queuedJob(jobId);
         when(jobRepository.findWithLockByJobId(jobId)).thenReturn(Optional.of(job));
         when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        when(reportService.findReportIdByGenerationJobId(jobId)).thenReturn(Optional.empty());
+        when(ragReportClient.generate(job)).thenReturn(new RagReportClient.GeneratedContent("generated", List.of()));
+        when(reportService.saveGeneratedReport(any())).thenReturn(42);
+        runSubmittedTasksInline();
 
-        Report report = Report.builder().reportid(42).build();
-        when(reportService.findGeneratedReport(jobId)).thenReturn(Optional.empty());
-        when(reportService.createReport(any(), eq(jobId))).thenReturn(report);
-        when(reportJobExecutor.submit(any(Runnable.class))).thenAnswer(invocation -> {
-            ((Runnable) invocation.getArgument(0)).run();
-            return null;
-        });
-
-        service.relayOutboxEvents();
+        service.on(new ReportGenerationRequested(jobId));
 
         assertThat(job.getStatus()).isEqualTo(ReportJobStatus.SUCCEEDED);
         assertThat(job.getAttemptCount()).isEqualTo(1);
-        assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PUBLISHED);
-        verify(reportService, times(1)).createReport(any(), eq(jobId));
+        assertThat(job.getReportId()).isEqualTo(42);
+        verify(ragReportClient, times(1)).generate(job);
+        verify(reportService, times(1)).saveGeneratedReport(any());
     }
 
     @Test
-    void relayOutboxEvents_deadLettersEventAndFailsJob_afterRepeatedDispatchFailures() {
+    void failedExecution_schedulesRetry_beforeAttemptLimit() {
         UUID jobId = UUID.randomUUID();
-        UUID eventId = UUID.randomUUID();
-        ReportJob job = ReportJob.builder()
-                .jobId(jobId).user(user("u1")).status(ReportJobStatus.QUEUED)
-                .attemptCount(0).maxAttempts(MAX_ATTEMPTS).nextAttemptAt(Instant.now())
-                .traceId("t").title("t").company("c").date("d")
-                .createdAt(Instant.now()).updatedAt(Instant.now()).build();
-        OutboxEvent event = OutboxEvent.builder()
-                .eventId(eventId).aggregateId(jobId).eventType("REPORT_REQUESTED")
-                .payload("{}").status(OutboxEventStatus.PENDING).attemptCount(OUTBOX_MAX_ATTEMPTS - 1)
-                .availableAt(Instant.now().minusSeconds(1)).createdAt(Instant.now()).build();
-
-        when(outboxEventRepository.findTop10ByStatusAndAvailableAtLessThanEqualOrderByCreatedAtAsc(eq(OutboxEventStatus.PENDING), any()))
-                .thenReturn(List.of(event));
-        when(outboxEventRepository.findTop10ByStatusAndLeaseExpiresAtLessThanOrderByCreatedAtAsc(eq(OutboxEventStatus.PROCESSING), any()))
-                .thenReturn(List.of());
-        when(jobRepository.findTop10ByStatusAndLeaseExpiresAtLessThanOrderByCreatedAtAsc(eq(ReportJobStatus.RUNNING), any()))
-                .thenReturn(List.of());
-        when(outboxEventRepository.findWithLockByEventId(eventId)).thenReturn(Optional.of(event));
-        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.empty());
+        ReportJob job = queuedJob(jobId);
         when(jobRepository.findWithLockByJobId(jobId)).thenReturn(Optional.of(job));
+        when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        when(reportService.findReportIdByGenerationJobId(jobId)).thenReturn(Optional.empty());
+        when(ragReportClient.generate(job)).thenThrow(new ApiException("rag down", org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR));
+        runSubmittedTasksInline();
 
-        service.relayOutboxEvents();
+        service.on(new ReportGenerationRequested(jobId));
 
-        assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.DEAD);
-        assertThat(job.getStatus()).isEqualTo(ReportJobStatus.FAILED);
-        assertThat(job.getLastError()).contains(eventId.toString());
-        verify(reportJobMetrics).recordOutboxDeadLettered();
-        verify(reportJobExecutor, never()).submit(any(Runnable.class));
+        assertThat(job.getStatus()).isEqualTo(ReportJobStatus.RETRYING);
+        assertThat(job.getLastError()).contains("rag down");
+        assertThat(job.getNextAttemptAt()).isAfter(Instant.now());
+        verify(reportService, never()).saveGeneratedReport(any());
     }
 
     @Test
-    void relayOutboxEvents_reschedulesWithoutDeadLettering_beforeAttemptLimit() {
-        UUID jobId = UUID.randomUUID();
-        UUID eventId = UUID.randomUUID();
-        OutboxEvent event = OutboxEvent.builder()
-                .eventId(eventId).aggregateId(jobId).eventType("REPORT_REQUESTED")
-                .payload("{}").status(OutboxEventStatus.PENDING).attemptCount(0)
-                .availableAt(Instant.now().minusSeconds(1)).createdAt(Instant.now()).build();
-
-        when(outboxEventRepository.findTop10ByStatusAndAvailableAtLessThanEqualOrderByCreatedAtAsc(eq(OutboxEventStatus.PENDING), any()))
-                .thenReturn(List.of(event));
-        when(outboxEventRepository.findTop10ByStatusAndLeaseExpiresAtLessThanOrderByCreatedAtAsc(eq(OutboxEventStatus.PROCESSING), any()))
-                .thenReturn(List.of());
-        when(jobRepository.findTop10ByStatusAndLeaseExpiresAtLessThanOrderByCreatedAtAsc(eq(ReportJobStatus.RUNNING), any()))
-                .thenReturn(List.of());
-        when(outboxEventRepository.findWithLockByEventId(eventId)).thenReturn(Optional.of(event));
-        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.empty());
-
-        service.relayOutboxEvents();
-
-        assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
-        assertThat(event.getAttemptCount()).isEqualTo(1);
-        verify(jobRepository, never()).findWithLockByJobId(any());
-        verify(reportJobMetrics, never()).recordOutboxDeadLettered();
-    }
-
-    @Test
-    void relayOutboxEvents_recoversRunningJobWithExpiredLease() {
+    void dispatchDueRetries_recoversRunningJobWithExpiredLease() {
         UUID jobId = UUID.randomUUID();
         ReportJob job = ReportJob.builder()
-                .jobId(jobId).user(user("u1")).status(ReportJobStatus.RUNNING)
+                .jobId(jobId).userId("u1").status(ReportJobStatus.RUNNING)
                 .attemptCount(1).maxAttempts(MAX_ATTEMPTS).nextAttemptAt(Instant.now())
                 .leaseExpiresAt(Instant.now().minusSeconds(5))
                 .traceId("t").title("t").company("c").date("d")
                 .createdAt(Instant.now()).updatedAt(Instant.now()).build();
 
-        when(outboxEventRepository.findTop10ByStatusAndAvailableAtLessThanEqualOrderByCreatedAtAsc(eq(OutboxEventStatus.PENDING), any()))
-                .thenReturn(List.of());
-        when(outboxEventRepository.findTop10ByStatusAndLeaseExpiresAtLessThanOrderByCreatedAtAsc(eq(OutboxEventStatus.PROCESSING), any()))
+        when(jobRepository.findTop10ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(eq(List.of(ReportJobStatus.RETRYING)), any()))
                 .thenReturn(List.of());
         when(jobRepository.findTop10ByStatusAndLeaseExpiresAtLessThanOrderByCreatedAtAsc(eq(ReportJobStatus.RUNNING), any()))
                 .thenReturn(List.of(job));
         when(jobRepository.findWithLockByJobId(jobId)).thenReturn(Optional.of(job));
 
-        service.relayOutboxEvents();
+        service.dispatchDueRetries();
 
         assertThat(job.getStatus()).isEqualTo(ReportJobStatus.RETRYING);
         assertThat(job.getLeaseExpiresAt()).isNull();
-        verify(outboxEventRepository).save(any());
+        verify(events).publishEvent(isA(ReportJobStatusChanged.class));
     }
 
     @Test
     void cancel_marksJobCancelled_andFinishesAttempt() {
         UUID jobId = UUID.randomUUID();
         ReportJob job = ReportJob.builder()
-                .jobId(jobId).user(user("u1")).status(ReportJobStatus.QUEUED)
+                .jobId(jobId).userId("u1").status(ReportJobStatus.QUEUED)
                 .traceId("t").createdAt(Instant.now()).updatedAt(Instant.now()).build();
-        when(jobRepository.findByJobIdAndUser_Userid(jobId, "u1")).thenReturn(Optional.of(job));
+        when(jobRepository.findByJobIdAndUserId(jobId, "u1")).thenReturn(Optional.of(job));
 
         ReportJobResponseDto response = service.cancel(jobId, "u1");
 
@@ -281,9 +216,9 @@ class ReportJobServiceTest {
     void cancel_rejectsAlreadyCompletedJob() {
         UUID jobId = UUID.randomUUID();
         ReportJob job = ReportJob.builder()
-                .jobId(jobId).user(user("u1")).status(ReportJobStatus.SUCCEEDED)
+                .jobId(jobId).userId("u1").status(ReportJobStatus.SUCCEEDED)
                 .traceId("t").createdAt(Instant.now()).updatedAt(Instant.now()).build();
-        when(jobRepository.findByJobIdAndUser_Userid(jobId, "u1")).thenReturn(Optional.of(job));
+        when(jobRepository.findByJobIdAndUserId(jobId, "u1")).thenReturn(Optional.of(job));
 
         assertThatThrownBy(() -> service.cancel(jobId, "u1")).isInstanceOf(ApiException.class);
     }

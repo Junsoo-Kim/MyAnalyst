@@ -120,20 +120,24 @@ OpenSearch 기본(standard) 분석기는 한국어 조사를 못 뗀다("영업�
 
 ## 현재 요청 흐름
 
+> 2026-10-20 MSA 1단계(Spring Modulith 경계 확정)로 BE 내부 구조가 바뀌었다. 상세와 검증 기록은
+> [docs/msa/stage1/README.md](docs/msa/stage1/README.md).
+
 ```text
 React → POST /report-jobs (202)
-      → PostgreSQL report_jobs / report_job_attempt
-      → bounded local dispatcher → Spring RAG client → FastAPI /reports
-      → PostgreSQL report + dictionary
+      → [generation] report_jobs 저장 + ReportGenerationRequested 발행 (한 트랜잭션, event_publication)
+      → (커밋 후, 비동기) claim → bounded executor → RAG client → FastAPI /reports
+      → [report] reports 저장 + ReportCreated 발행 → [dictionary] 용어 저장
+      → [generation] Job SUCCEEDED + ReportJobStatusChanged 발행 → [notification] SSE
 
 React ← SSE /report-jobs/{jobId}/events, GET /report-jobs/{jobId}
 ```
 
-`report_jobs`가 작업 상태의 기준 데이터다. 브라우저 새로고침이나 API 서버 재시작 뒤에도 상태 조회가 가능하며, lease 만료된 `RUNNING` 작업은 다시 처리 대상으로 잡힌다. 개발 환경에서는 PostgreSQL-backed in-process dispatcher를 사용한다. 운영에서 여러 API 인스턴스를 실행할 때는 이 dispatcher를 SQS + DLQ consumer로 교체해야 한다.
+`report_jobs`가 작업 상태의 기준 데이터다. 브라우저 새로고침이나 API 서버 재시작 뒤에도 상태 조회가 가능하며, lease 만료된 `RUNNING` 작업은 다시 처리 대상으로 잡힌다.
 
-`outbox_events`는 Job과 같은 트랜잭션에서 `REPORT_REQUESTED` 이벤트를 저장한다. relay가 이벤트 lease를 획득한 뒤 local dispatcher에 전달하고 `PUBLISHED`로 기록한다. 따라서 Job DB 저장 성공 뒤 프로세스가 종료되어 전달이 누락되는 경우를 복구할 수 있다. 외부 SQS relay로 교체할 때도 이 테이블과 상태 전이 규칙은 유지한다.
+직접 만든 `outbox_events` relay는 Spring Modulith 이벤트 발행 레지스트리(`event_publication`)로 교체했다. 이벤트는 비즈니스 변경과 같은 트랜잭션에 기록되고, 리스너가 정상 완료해야 완료 처리된다. 미완료 발행은 재기동 시 그리고 30초마다 다시 전달된다. 지연 재시도(`RETRYING`)와 lease 만료 복구는 Job 테이블을 보는 스케줄러가 맡는다. 기존 `outbox_events` 테이블은 더 이상 쓰지 않는다(ddl-auto가 지우지 않으므로 남아 있을 수 있다).
 
-전달이 반복적으로 실패하는 이벤트는 `app.report-jobs.outbox-max-attempts`(기본 5회)를 넘기면 `DEAD` 상태로 옮기고 연결된 Job을 `FAILED`로 종료한다. 이전에는 상한 없이 60초 간격으로 재시도가 무한 반복됐다.
+**알려진 공백**: 이전 relay는 전달이 5회 실패하면 이벤트를 `DEAD`로 옮겼지만, Modulith 레지스트리는 미완료 발행을 상한 없이 재전달한다. Job 자체는 `max-attempts`(3회)로 종료되므로 보고서 생성이 무한 반복되지는 않지만, 계속 실패하는 리스너(예: 용어 저장)는 30초마다 재시도된다. Kafka 도입(2단계)에서 DLT로 보완한다.
 
 생성 결과에는 `generation_job_id` unique key를 기록한다. Worker가 보고서를 저장한 직후 중단되더라도 lease recovery가 기존 결과를 찾아 Job만 완료 처리하므로 같은 Job이 Report를 중복 저장하지 않는다.
 
@@ -173,7 +177,9 @@ python -m unittest discover -s tests -v
 python -m unittest discover -s evaluation\tests -v
 ```
 
-`ReportJobServiceTest`는 Mockito로 idempotency, outbox 발행/DLQ 전환, lease 만료 후 복구, 정상 dispatch 시 Report가 정확히 한 번만 생성되는지를 검증한다. 동시에 같은 Job을 두 워커가 claim할 때 비관적 락으로 하나만 성공하는지는 `ReportJobConcurrencyIT`(Testcontainers, 실제 PostgreSQL)가 검증한다.
+`ReportJobServiceTest`는 Mockito로 idempotency, 생성 요청 이벤트 발행, 실패 시 재시도 예약, lease 만료 후 복구, 정상 dispatch 시 Report가 정확히 한 번만 생성되는지를 검증한다. 동시에 같은 Job을 두 워커가 claim할 때 비관적 락으로 하나만 성공하는지는 `ReportJobConcurrencyIT`(Testcontainers, 실제 PostgreSQL)가 검증한다. `ModularityTests`는 모듈 경계 위반·순환 의존을 검출한다.
+
+`ReportJobConcurrencyIT`는 이름이 `*IT`라 Surefire 기본 설정에서 제외돼 그동안 `mvnw test`(CI 포함)에서 실행되지 않았다. 2026-10-20에 Surefire includes에 추가했다.
 
 ## RAG 평가 실행
 
@@ -194,7 +200,7 @@ Milvus 없이 metric·CI wiring만 검증하려면 `--fixture evaluation\fixture
 
 ## 다음 우선순위
 
-1. in-process dispatcher를 SQS consumer로 분리한다. outbox 자체의 DLQ(반복 실패 시 `DEAD` 전환)는 완료했다.
+1. in-process dispatcher를 Kafka consumer(RAG 워커)로 분리한다 — MSA 2·3단계. 이벤트 전달 DLQ는 Kafka DLT로 다시 갖춘다.
 2. Golden Dataset 기반 Recall@K, MRR, citation/faithfulness 평가를 CI 품질 게이트로 만든다. `golden_dataset.example.jsonl`은 아직 placeholder ID이며 실제 Milvus 검색 결과로 교체해야 한다.
 3. Tempo/Jaeger 같은 분산 추적 백엔드를 붙이고, FastAPI의 trace_id를 Spring 쪽 OpenTelemetry span과 실제로 연결한다.
 4. Grafana dashboard로 Spring `/actuator/prometheus`와 FastAPI `/metrics`를 함께 시각화한다.

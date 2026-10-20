@@ -1,5 +1,6 @@
 package khu_swcon.myanalyst.auth.internal;
 
+import khu_swcon.myanalyst.auth.CurrentUser;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpMethod;
@@ -18,7 +19,7 @@ public class SessionAuthInterceptor implements HandlerInterceptor {
         if (HttpMethod.OPTIONS.matches(request.getMethod()) || PUBLIC_PATHS.contains(request.getRequestURI())) {
             return true;
         }
-        if (request.getSession(false) != null && request.getSession(false).getAttribute("userId") != null) {
+        if (request.getSession(false) != null && CurrentUser.of(request.getSession(false)) != null) {
             return true;
         }
         response.setStatus(HttpStatus.UNAUTHORIZED.value());

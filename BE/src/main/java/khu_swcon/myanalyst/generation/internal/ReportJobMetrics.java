@@ -18,10 +18,6 @@ public class ReportJobMetrics {
         meterRegistry.counter("report.jobs.transitions", "status", status).increment();
     }
 
-    public void recordOutboxDeadLettered() {
-        meterRegistry.counter("report.jobs.outbox.dead_lettered").increment();
-    }
-
     public void recordExecution(long startedAtNanos, String result) {
         Timer.builder("report.job.execution")
                 .tag("result", result)
