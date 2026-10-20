@@ -17,11 +17,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
@@ -125,7 +124,8 @@ public class ReportJobService {
         // 위반으로 여기서 실패한다 — saveAndFlush로 즉시 반영해 그 실패를 이 트랜잭션
         // 안에서 바로 확인한다(지연 flush면 이 메서드가 반환된 뒤에야 터진다).
         ReportJob savedJob = jobRepository.saveAndFlush(job);
-        // 같은 트랜잭션에서 발행하므로 Modulith 이벤트 레지스트리에 Job과 함께 커밋된다(Outbox).
+        // 같은 트랜잭션에서 발행하므로 Modulith 이벤트 레지스트리에 Job과 함께 커밋되고(Outbox),
+        // 커밋 후 Kafka로 나간다. 브로커가 내려가 있어도 요청은 202로 끝나고 발행은 나중에 재시도된다.
         events.publishEvent(new ReportGenerationRequested(savedJob.getJobId()));
         reportJobMetrics.recordStatus(ReportJobStatus.QUEUED.name());
         return ReportJobResponseDto.from(savedJob);
@@ -153,27 +153,43 @@ public class ReportJobService {
     }
 
     /**
-     * Job 커밋 이후 비동기로 실행된다. claim과 실행은 각자 트랜잭션을 열기 때문에 이 리스너 자체는
-     * 트랜잭션 없이 둔다. 정상 반환하면 이벤트 발행 기록이 완료 처리되고, 예외가 나면 미완료로 남아
-     * 재전달된다(claim이 멱등이라 중복 전달돼도 Job은 한 번만 실행된다).
+     * Kafka {@code generation.requested}를 소비한다. claim과 실행은 각자 트랜잭션을 열기 때문에 이 리스너
+     * 자체는 트랜잭션 없이 둔다. claim이 비관적 락으로 멱등하므로 같은 메시지가 다시 와도 Job은 한 번만
+     * 실행된다. 예외가 나면 공통 에러 핸들러가 재시도 후 DLT로 보낸다.
      */
-    @Async
-    @TransactionalEventListener
+    @KafkaListener(topics = ReportGenerationRequested.TOPIC, groupId = "generation-dispatcher")
     public void on(ReportGenerationRequested event) {
         dispatch(event.jobId());
     }
 
     /**
-     * 지수 백오프로 미뤄 둔 재시도와 lease가 만료된 RUNNING Job을 처리한다.
-     * 최초 실행은 {@link ReportGenerationRequested} 이벤트가 맡으므로 여기서는 QUEUED를 보지 않는다.
+     * 백오프 시간이 지난 RETRYING Job을 다시 큐에 넣고, lease가 만료된 RUNNING Job을 복구한다.
+     * 실행은 직접 하지 않고 {@link ReportGenerationRequested}를 다시 발행해 최초 실행과 같은 Kafka 경로를 탄다.
      */
     @Scheduled(fixedDelayString = "${app.report-jobs.poll-interval-ms:1000}")
     public void dispatchDueRetries() {
         Instant now = Instant.now();
         jobRepository.findTop10ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(List.of(ReportJobStatus.RETRYING), now)
-                .forEach(job -> dispatch(job.getJobId()));
+                .forEach(job -> transactionTemplate.executeWithoutResult(status -> requeue(job.getJobId())));
         jobRepository.findTop10ByStatusAndLeaseExpiresAtLessThanOrderByCreatedAtAsc(ReportJobStatus.RUNNING, now)
                 .forEach(job -> transactionTemplate.executeWithoutResult(status -> recoverExpiredJob(job.getJobId())));
+    }
+
+    /**
+     * RETRYING → QUEUED로 바꾸고 생성 요청을 같은 트랜잭션에서 발행한다. 상태를 바꿔 두므로 다음 폴링에서
+     * 같은 Job을 또 발행하지 않는다.
+     */
+    private void requeue(UUID jobId) {
+        ReportJob job = jobRepository.findWithLockByJobId(jobId).orElse(null);
+        Instant now = Instant.now();
+        if (job == null || job.getStatus() != ReportJobStatus.RETRYING || job.getNextAttemptAt().isAfter(now)) {
+            return;
+        }
+        job.setStatus(ReportJobStatus.QUEUED);
+        job.setProgressMessage("Requeued for retry");
+        job.setUpdatedAt(now);
+        events.publishEvent(new ReportGenerationRequested(jobId));
+        publishStatus(job);
     }
 
     private void dispatch(UUID jobId) {

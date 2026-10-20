@@ -8,7 +8,7 @@ import khu_swcon.myanalyst.report.ReportService;
 import khu_swcon.myanalyst.report.ReportTerm;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.modulith.events.ApplicationModuleListener;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,10 +46,11 @@ public class DictionaryService {
     }
 
     /**
-     * 보고서가 커밋된 뒤 별도 트랜잭션에서 용어를 저장한다. 실패하면 Modulith 이벤트 레지스트리에
-     * 미완료로 남아 재전달되므로, 이미 저장된 보고서는 다시 저장하지 않는다.
+     * Kafka {@code report.created}를 소비해 용어를 저장한다. 메시지는 최소 한 번 이상 올 수 있으므로
+     * 이미 용어가 있는 보고서는 건너뛴다(멱등). 실패하면 재시도 후 {@code report.created.DLT}로 간다.
      */
-    @ApplicationModuleListener
+    @KafkaListener(topics = ReportCreated.TOPIC, groupId = "dictionary")
+    @Transactional
     public void on(ReportCreated event) {
         if (event.terms() == null || dictionaryRepository.existsByReportId(event.reportId())) {
             return;
@@ -65,7 +66,8 @@ public class DictionaryService {
         dictionaryRepository.saveAll(entries);
     }
 
-    @ApplicationModuleListener
+    @KafkaListener(topics = ReportDeleted.TOPIC, groupId = "dictionary")
+    @Transactional
     public void on(ReportDeleted event) {
         dictionaryRepository.deleteByReportId(event.reportId());
     }

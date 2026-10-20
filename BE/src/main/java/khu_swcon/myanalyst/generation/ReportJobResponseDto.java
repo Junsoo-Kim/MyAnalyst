@@ -4,12 +4,14 @@ import khu_swcon.myanalyst.generation.internal.ReportJob;
 import khu_swcon.myanalyst.generation.ReportJobStatus;
 import lombok.Builder;
 import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Value
 @Builder
+@Jacksonized // Kafka 메시지(ReportJobStatusChanged)에서 역직렬화할 수 있도록 빌더를 Jackson에 연결한다.
 public class ReportJobResponseDto {
     UUID jobId;
     String traceId;

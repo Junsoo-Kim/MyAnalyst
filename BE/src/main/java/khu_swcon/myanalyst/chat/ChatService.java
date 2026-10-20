@@ -9,7 +9,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
-import org.springframework.modulith.events.ApplicationModuleListener;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.BodyInserters;
@@ -187,8 +187,9 @@ public class ChatService {
         }
     }
 
-    /** 보고서가 삭제되면 커밋 이후 별도 트랜잭션에서 그 보고서의 채팅 기록을 지운다. */
-    @ApplicationModuleListener
+    /** Kafka {@code report.deleted}를 소비해 그 보고서의 채팅 기록을 지운다. 다시 와도 결과가 같다(멱등). */
+    @KafkaListener(topics = ReportDeleted.TOPIC, groupId = "chat")
+    @Transactional
     public void on(ReportDeleted event) {
         chatRepository.deleteByReportId(event.reportId());
     }

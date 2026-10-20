@@ -7,6 +7,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -25,6 +26,10 @@ class MyanalystApplicationTests {
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
             .withExposedPorts(6379);
 
+    @Container
+    @ServiceConnection
+    static KafkaContainer kafka = new KafkaContainer("apache/kafka:3.9.1");
+
     @Autowired
     private ApplicationContext context;
 
@@ -33,6 +38,7 @@ class MyanalystApplicationTests {
         assertThat(context).isNotNull();
         assertThat(postgres.isRunning()).isTrue();
         assertThat(redis.isRunning()).isTrue();
+        assertThat(kafka.isRunning()).isTrue();
     }
 
 }

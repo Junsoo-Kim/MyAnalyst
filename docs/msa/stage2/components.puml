@@ -1,0 +1,41 @@
+@startuml
+set separator none
+title MyanalystApplication
+
+top to bottom direction
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+Container_Boundary("MyanalystApplication.MyanalystApplication_boundary", "MyanalystApplication", $tags="") {
+  Component(MyanalystApplication.MyanalystApplication.Shared, "Shared", $techn="Module", $descr="", $tags="", $link="")
+  Component(MyanalystApplication.MyanalystApplication.User, "User", $techn="Module", $descr="", $tags="", $link="")
+  Component(MyanalystApplication.MyanalystApplication.Auth, "Auth", $techn="Module", $descr="", $tags="", $link="")
+  Component(MyanalystApplication.MyanalystApplication.Chat, "Chat", $techn="Module", $descr="", $tags="", $link="")
+  Component(MyanalystApplication.MyanalystApplication.Dictionary, "Dictionary", $techn="Module", $descr="", $tags="", $link="")
+  Component(MyanalystApplication.MyanalystApplication.Generation, "Generation", $techn="Module", $descr="", $tags="", $link="")
+  Component(MyanalystApplication.MyanalystApplication.Marketdata, "Marketdata", $techn="Module", $descr="", $tags="", $link="")
+  Component(MyanalystApplication.MyanalystApplication.Notification, "Notification", $techn="Module", $descr="", $tags="", $link="")
+  Component(MyanalystApplication.MyanalystApplication.Report, "Report", $techn="Module", $descr="", $tags="", $link="")
+}
+
+Rel(MyanalystApplication.MyanalystApplication.Generation, MyanalystApplication.MyanalystApplication.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Generation, MyanalystApplication.MyanalystApplication.Auth, "depends on", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Generation, MyanalystApplication.MyanalystApplication.User, "uses", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Generation, MyanalystApplication.MyanalystApplication.Report, "uses", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Dictionary, MyanalystApplication.MyanalystApplication.Auth, "depends on", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Dictionary, MyanalystApplication.MyanalystApplication.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Dictionary, MyanalystApplication.MyanalystApplication.Report, "uses", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Chat, MyanalystApplication.MyanalystApplication.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Chat, MyanalystApplication.MyanalystApplication.Auth, "depends on", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Chat, MyanalystApplication.MyanalystApplication.Report, "uses", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Report, MyanalystApplication.MyanalystApplication.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Report, MyanalystApplication.MyanalystApplication.Auth, "depends on", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Notification, MyanalystApplication.MyanalystApplication.Auth, "depends on", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Notification, MyanalystApplication.MyanalystApplication.Generation, "uses", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Auth, MyanalystApplication.MyanalystApplication.User, "uses", $techn="", $tags="", $link="")
+Rel(MyanalystApplication.MyanalystApplication.Marketdata, MyanalystApplication.MyanalystApplication.Shared, "depends on", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+@enduml

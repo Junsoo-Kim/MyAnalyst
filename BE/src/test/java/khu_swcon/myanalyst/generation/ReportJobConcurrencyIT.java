@@ -29,7 +29,11 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers(disabledWithoutDocker = true)
-@SpringBootTest(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
+// DB 락·유니크 제약만 검증하는 테스트라 Kafka(토픽 생성, 리스너, 외부 발행)는 끈다.
+@SpringBootTest(properties = {
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "app.kafka.listener-starter.enabled=false",
+        "spring.modulith.events.externalization.enabled=false"})
 class ReportJobConcurrencyIT {
 
     @Container

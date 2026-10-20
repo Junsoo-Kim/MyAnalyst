@@ -122,6 +122,8 @@ OpenSearch 기본(standard) 분석기는 한국어 조사를 못 뗀다("영업�
 
 > 2026-10-20 MSA 1단계(Spring Modulith 경계 확정)로 BE 내부 구조가 바뀌었다. 상세와 검증 기록은
 > [docs/msa/stage1/README.md](docs/msa/stage1/README.md).
+> 같은 날 2단계(Kafka 도입)로 모듈 간 연결이 Kafka 토픽으로 바뀌었다. 아래 흐름의 이벤트는 모두 Kafka를 거친다.
+> 상세는 [docs/msa/stage2/README.md](docs/msa/stage2/README.md).
 
 ```text
 React → POST /report-jobs (202)
@@ -137,7 +139,7 @@ React ← SSE /report-jobs/{jobId}/events, GET /report-jobs/{jobId}
 
 직접 만든 `outbox_events` relay는 Spring Modulith 이벤트 발행 레지스트리(`event_publication`)로 교체했다. 이벤트는 비즈니스 변경과 같은 트랜잭션에 기록되고, 리스너가 정상 완료해야 완료 처리된다. 미완료 발행은 재기동 시 그리고 30초마다 다시 전달된다. 지연 재시도(`RETRYING`)와 lease 만료 복구는 Job 테이블을 보는 스케줄러가 맡는다. 기존 `outbox_events` 테이블은 더 이상 쓰지 않는다(ddl-auto가 지우지 않으므로 남아 있을 수 있다).
 
-**알려진 공백**: 이전 relay는 전달이 5회 실패하면 이벤트를 `DEAD`로 옮겼지만, Modulith 레지스트리는 미완료 발행을 상한 없이 재전달한다. Job 자체는 `max-attempts`(3회)로 종료되므로 보고서 생성이 무한 반복되지는 않지만, 계속 실패하는 리스너(예: 용어 저장)는 30초마다 재시도된다. Kafka 도입(2단계)에서 DLT로 보완한다.
+이전 relay는 전달이 5회 실패하면 이벤트를 `DEAD`로 옮겼다. 2단계부터는 소비 실패를 Kafka 에러 핸들러가 3회 재시도 후 `<topic>.DLT`로 보낸다. Modulith 레지스트리의 재전달(상한 없음)은 이제 "브로커로 보내기"에만 적용되며, 브로커가 돌아오면 끝난다.
 
 생성 결과에는 `generation_job_id` unique key를 기록한다. Worker가 보고서를 저장한 직후 중단되더라도 lease recovery가 기존 결과를 찾아 Job만 완료 처리하므로 같은 Job이 Report를 중복 저장하지 않는다.
 
