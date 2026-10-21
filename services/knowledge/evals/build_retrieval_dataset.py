@@ -44,7 +44,17 @@ def extract_body(html: str) -> str:
         text = " ".join(p for p in parts if p)
         if len(text) > len(best):
             best = text
-    return re.sub(r"\s+", " ", best).strip()
+    return clean_body(best)
+
+
+# 일부 매체는 본문 중간에 광고 자리 표시 문자열을 넣는다("PC 기사뷰 3문단 하단 (20260313)// AD Manager | AD177... //").
+_AD_NOISE = [re.compile(r"PC 기사\S*(?: \S+){0,3} ?\(\d{8}\)"), re.compile(r"AD Manager \| AD\d+"), re.compile(r"(?://\s*)+")]
+
+
+def clean_body(text: str) -> str:
+    for pattern in _AD_NOISE:
+        text = pattern.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def extract_title(html: str) -> str:

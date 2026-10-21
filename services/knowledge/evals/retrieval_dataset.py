@@ -27,7 +27,8 @@ PARTICLES = sorted([
 VERBAL_ENDINGS = ("다", "고", "며", "면", "서", "지만", "는데", "했다", "된", "한", "할", "하는", "있는", "없는", "인", "될", "하며")
 STOPWORDS = {"이번", "지난", "올해", "또한", "그리고", "이에", "이날", "현재", "관련", "통해", "대해", "위해", "따라", "등", "것", "수", "중"}
 
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?다요])\s+")
+# 문장부호 뒤에서만 자른다. "다" 뒤에서 자르면 "보다", "만큼이다" 같은 어절 중간에서 문장이 끊긴다.
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 _EOJEOL = re.compile(r"[^\s\"'“”‘’()\[\]<>《》「」]+")
 
 
@@ -118,14 +119,30 @@ def relevant_chunk_keys(corpus: Dict[str, dict], article_id: str, sentence_sha1:
     """정답 청크 키("<article_id>:<chunk>") 목록. 같은 기사를 여러 매체가 실어 똑같은 문장이 다른 기사에도 있으면
     그 청크도 정답으로 센다(한 매체의 청크만 정답으로 두면 같은 내용을 찾아도 오답이 된다).
     원래 기사에서 문장을 못 찾으면(기사가 바뀜) 빈 목록."""
-    if article_id not in corpus or relevant_chunk_index(corpus[article_id]["body"], sentence_sha1) is None:
+    if article_id not in corpus:
         return []
+    target = next((s for s in split_sentences(corpus[article_id]["body"]) if sha1(s) == sentence_sha1), None)
+    if target is None:
+        return []
+    target_words = set(eojeols(target))
     keys = []
     for other_id, article in corpus.items():
-        index = relevant_chunk_index(article["body"], sentence_sha1)
-        if index is not None:
-            keys.append(f"{other_id}:{index}")
-    return keys
+        for index, chunk in enumerate(chunk_article(article["body"])):
+            # 같은 문장이거나, 매체마다 앞뒤 몇 어절만 다른 거의 같은 문장(어절 집합 Jaccard 0.8 이상)이면 정답이다.
+            for sentence in split_sentences(chunk):
+                words = set(eojeols(sentence))
+                if sentence == target or (words and len(words & target_words) / len(words | target_words) >= 0.8):
+                    keys.append(f"{other_id}:{index}")
+                    break
+    return sorted(set(keys))
+
+
+def content_overlap(query: str, sentence: str) -> float:
+    """질의 단어 중 원문 문장에 (조사를 떼고) 그대로 나오는 비율. 바꿔 쓴 질의가 원문 단어를 얼마나 피했는지 본다."""
+    terms = [t for t in (strip_particle(w) for w in eojeols(query)) if len(t) >= 2]
+    if not terms:
+        return 0.0
+    return sum(1 for t in terms if t in sentence) / len(terms)
 
 
 def query_has_number(query: Dict[str, str]) -> bool:
