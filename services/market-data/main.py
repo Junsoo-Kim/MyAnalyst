@@ -3,12 +3,18 @@ import urllib.parse
 from typing import List
 
 from fastapi import Body, HTTPException, Path
+from fastapi.encoders import jsonable_encoder
 
+import cache
 import crawling
 from crawling import NewsItemResponse, StockInfo, TermDefinitionOutput, TermInput
 from myanalyst_common.web import create_app
 
 app = create_app(title="MyAnalyst Market Data Service", service="market-data")
+
+# 캐시 TTL(초). BE가 Redis에 캐시하던 값 그대로다(뉴스 5분, 시세 1분).
+NEWS_TTL_SECONDS = 300
+STOCK_TTL_SECONDS = 60
 
 @app.get(
     "/news/{company_name}", 
@@ -36,6 +42,10 @@ async def get_company_news(
         if not company_name or company_name.strip() == "":
             raise HTTPException(status_code=400, detail="회사명이 비어있습니다. 유효한 회사명을 입력해주세요.")
             
+        cached = cache.get_json(f"news:{company_name}")
+        if cached is not None:
+            return cached
+
         news_items = crawling.crawl_naver_news_for_company(company_name, limit=10)
         
         # 디버깅용 로그 추가
@@ -55,6 +65,7 @@ async def get_company_news(
             ) for item in news_items
         ]
         
+        cache.set_json(f"news:{company_name}", jsonable_encoder(response_items), NEWS_TTL_SECONDS)
         return response_items
         
     except HTTPException as http_exc:
@@ -84,10 +95,15 @@ async def get_stock_info_by_company_name_updated(
     company_name_query: str = Path(..., title="회사명", description="검색할 회사명 (예: 셀트리온, 삼성전자).")
 ):
     try:
+        cached = cache.get_json(f"stocks:{company_name_query}")
+        if cached is not None:
+            return cached
+
         stock_data = crawling.get_stock_data_with_search(company_name_query)
 
         if not stock_data:
              raise HTTPException(status_code=404, detail=f"'{company_name_query}'에 대한 주식 정보를 구성할 수 없습니다.")
+        cache.set_json(f"stocks:{company_name_query}", jsonable_encoder(stock_data), STOCK_TTL_SECONDS)
         return stock_data
     except HTTPException as http_exc:
         raise http_exc

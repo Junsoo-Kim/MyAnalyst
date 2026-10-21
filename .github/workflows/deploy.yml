@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - "BE/**"
       - "services/**"
       - "contracts/**"
       - ".github/workflows/deploy.yml"
@@ -30,14 +29,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Run BE tests (Testcontainers uses the runner's built-in Docker)
-        working-directory: ./BE
-        run: ./mvnw test
-
-      - name: Build Java services (gateway, identity, report-attached features)
+      - name: Test Java services (Testcontainers uses the runner's built-in Docker)
         working-directory: ./services
         run: |
-          for svc in api-gateway auth-service user-service notification-service dictionary-service chat-service; do
+          for svc in generation-service report-service api-gateway auth-service user-service notification-service dictionary-service chat-service; do
             (cd "$svc" && chmod +x mvnw && ./mvnw -B -q verify)
           done
 
@@ -55,7 +50,7 @@ jobs:
             -r market-data/requirements.txt -r qa/requirements.txt -r stt/requirements.txt
 
       # Each service is tested from its own directory (flat modules, like its container's /app).
-      # generation-worker's message contract test reads ../../contracts, shared with the BE contract test.
+      # generation-worker's message contract test reads ../../contracts, shared with generation-service's contract test.
       - name: Run Python service tests
         working-directory: ./services
         run: |
@@ -81,10 +76,14 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: be
-            context: ./BE
-            dockerfile: ./BE/Dockerfile
-            container: be
+          - name: generation-service
+            context: ./services/generation-service
+            dockerfile: ./services/generation-service/Dockerfile
+            container: generation-service
+          - name: report-service
+            context: ./services/report-service
+            dockerfile: ./services/report-service/Dockerfile
+            container: report-service
           - name: api-gateway
             context: ./services/api-gateway
             dockerfile: ./services/api-gateway/Dockerfile

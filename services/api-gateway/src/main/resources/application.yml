@@ -58,11 +58,22 @@ spring:
           uri: ${CHAT_SERVICE_URL:http://localhost:8086}
           predicates:
             - Path=/chat,/chat/stt,/reports/*/chat
-        # 나머지 API(보고서, 보고서 생성 Job, 시장 데이터)는 아직 BE에 있다. 6단계에서 떼어낼 때 여기 경로만 옮긴다.
-        - id: be
-          uri: ${BE_URL:http://localhost:8081}
+        # MSA 6단계: BE 모놀리스가 사라지고 보고서·생성 Job은 각 서비스가, 시세·뉴스는 market-data가 직접 받는다.
+        # catch-all은 없다. 어느 라우트에도 맞지 않는 경로는 Gateway가 404로 끝낸다.
+        - id: generation
+          uri: ${GENERATION_SERVICE_URL:http://localhost:8081}
           predicates:
-            - Path=/**
+            - Path=/report-jobs,/report-jobs/**
+        - id: report
+          uri: ${REPORT_SERVICE_URL:http://localhost:8088}
+          predicates:
+            - Path=/reports,/reports/**
+        # market-data는 Python 서비스라 X-Internal-Token을 보지 않는다. 그래서 조회 경로만 연다(/dictionaries 등 내부 API 제외).
+        - id: market-data
+          uri: ${MARKET_DATA_SERVICE_URL:http://localhost:8002}
+          predicates:
+            - Path=/news/*,/stocks/*,/stocks/*/chart-image
+            - Method=GET
 
 app:
   jwt:

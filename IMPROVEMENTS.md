@@ -132,6 +132,9 @@ OpenSearch 기본(standard) 분석기는 한국어 조사를 못 뗀다("영업�
 > 5단계로 아래 흐름의 `[dictionary]`, `[notification]`(그리고 채팅)은 BE 밖의 dictionary-service, notification-service,
 > chat-service가 됐다. 각자 `report.created`·`job.status-changed`로 받은 사본으로 소유권을 판단한다.
 > 상세는 [docs/msa/stage5/README.md](docs/msa/stage5/README.md).
+> 6단계로 BE 모놀리스가 사라졌다. 아래 `[generation]`은 generation-service, `[report]`는 report-service이고,
+> 보고서 저장은 직접 호출 대신 명령 토픽 `report.save-requested`를 거치는 Saga다(Job은 SAVING을 거쳐 SUCCEEDED).
+> 서비스마다 자기 database를 쓴다. 상세는 [docs/msa/stage6/README.md](docs/msa/stage6/README.md).
 
 ```text
 React → POST /report-jobs (202)
@@ -178,7 +181,10 @@ React ← SSE /report-jobs/{jobId}/events, GET /report-jobs/{jobId}
 ## 검증
 
 ```powershell
-cd MyAnalyst\BE
+# MSA 6단계부터 BE는 services\generation-service, services\report-service로 나뉘었다.
+eport-service로 나뉘었다.
+eport-service로 나뉘었다.
+cd MyAnalyst\services\generation-service
 .\mvnw.cmd test -q
 
 cd ..\FE

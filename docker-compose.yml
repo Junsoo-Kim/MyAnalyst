@@ -61,11 +61,14 @@ services:
     container_name: myanalyst-postgres
     image: postgres:16-alpine
     environment:
+      # myanalystdb is the pre-stage-6 shared database (migration source only). Services use their own databases,
+      # created by the init script below.
       POSTGRES_DB: myanalystdb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-root}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres/init-databases.sql:/docker-entrypoint-initdb.d/10-databases.sql:ro
     ports:
       - "5432:5432"
     healthcheck:
@@ -197,8 +200,15 @@ services:
     build:
       context: ./services
       dockerfile: market-data/Dockerfile
+    environment:
+      # Crawl results are cached here (moved from BE in MSA stage 6). Without Redis the service still works, uncached.
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "8002:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
 
   qa:
     container_name: myanalyst-qa
@@ -223,26 +233,40 @@ services:
     ports:
       - "8004:8000"
 
-  be:
-    container_name: myanalyst-be
+  # --- Reports and generation jobs (MSA stage 6: the BE monolith split into these two) ---
+
+  generation-service:
+    container_name: myanalyst-generation-service
     build:
-      context: ./BE
+      context: ./services/generation-service
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/myanalystdb
+      PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/generation_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-root}
-      MARKET_DATA_SERVICE_URL: http://market-data:8000
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       INTERNAL_GATEWAY_TOKEN: ${INTERNAL_GATEWAY_TOKEN:-local-dev-internal-token}
-    # Not published: clients reach the BE only through api-gateway.
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
         condition: service_healthy
-      redis:
+
+  report-service:
+    container_name: myanalyst-report-service
+    build:
+      context: ./services/report-service
+    environment:
+      PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/report_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      INTERNAL_GATEWAY_TOKEN: ${INTERNAL_GATEWAY_TOKEN:-local-dev-internal-token}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   # --- Edge and identity (MSA stage 4) ---
@@ -254,7 +278,9 @@ services:
       context: ./services/api-gateway
     environment:
       PORT: 8080
-      BE_URL: http://be:8080
+      GENERATION_SERVICE_URL: http://generation-service:8080
+      REPORT_SERVICE_URL: http://report-service:8080
+      MARKET_DATA_SERVICE_URL: http://market-data:8000
       AUTH_SERVICE_URL: http://auth-service:8080
       USER_SERVICE_URL: http://user-service:8080
       NOTIFICATION_SERVICE_URL: http://notification-service:8080
@@ -298,7 +324,7 @@ services:
       context: ./services/user-service
     environment:
       PORT: 8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/myanalystdb
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/user_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-root}
       INTERNAL_GATEWAY_TOKEN: ${INTERNAL_GATEWAY_TOKEN:-local-dev-internal-token}
@@ -327,7 +353,7 @@ services:
       context: ./services/dictionary-service
     environment:
       PORT: 8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/myanalystdb
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dictionary_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-root}
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
@@ -344,7 +370,7 @@ services:
       context: ./services/chat-service
     environment:
       PORT: 8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/myanalystdb
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/chat_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-root}
       QA_SERVICE_URL: http://qa:8000

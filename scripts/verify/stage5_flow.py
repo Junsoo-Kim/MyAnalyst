@@ -70,8 +70,8 @@ def produce(topic, messages):
     assert result.returncode == 0, result.stderr
 
 
-def psql(sql):
-    return docker("exec", POSTGRES, "psql", "-U", "postgres", "-d", "myanalystdb", "-tA", "-c", sql).stdout.strip()
+def psql(sql, db="myanalystdb"):
+    return docker("exec", POSTGRES, "psql", "-U", "postgres", "-d", db, "-tA", "-c", sql).stdout.strip()
 
 
 def create_job(cookie, title):

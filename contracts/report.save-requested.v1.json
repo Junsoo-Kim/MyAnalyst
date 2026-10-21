@@ -1,0 +1,13 @@
+{
+  "jobId": "2984b8fe-bb70-48a1-b232-a731858e1517",
+  "userId": "alice",
+  "title": "Celltrion Q4 report",
+  "chapter": "1. Executive Summary",
+  "indicator": "PER",
+  "company": "Celltrion",
+  "date": "2024 Q4",
+  "content": "### 1. Executive Summary\n\n...",
+  "terms": [
+    {"term": "PER", "explanation": "Price to earnings ratio"}
+  ]
+}

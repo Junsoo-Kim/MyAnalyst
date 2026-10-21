@@ -136,7 +136,7 @@ class GenerationWorker:
             JOBS.labels(result="completed").inc()
             JOB_DURATION.observe(elapsed)
             log.info("job=%s attempt=%s completed in %.1fs", request.job_id, request.attempt, elapsed)
-        except Exception as e:  # noqa: BLE001 - 어떤 실패든 BE에 알려 재시도 여부를 BE가 정하게 한다
+        except Exception as e:  # noqa: BLE001 - 어떤 실패든 generation-service에 알려 재시도 여부를 거기서 정하게 한다
             traceback.print_exc()
             self.publish(events.GENERATION_FAILED, key, events.GenerationFailed(
                 job_id=request.job_id, attempt=request.attempt, error=f"{type(e).__name__}: {e}"[:2000], retryable=True))
@@ -172,7 +172,7 @@ class GenerationWorker:
             self.consumer.resume(self.consumer.assignment())
 
         if self.revoked_while_busy:
-            # 처리 중에 파티션을 뺏겼다. 새 주인이 같은 메시지를 다시 처리하며, BE가 시도 번호·Job 상태로 중복을 무시한다.
+            # 처리 중에 파티션을 뺏겼다. 새 주인이 같은 메시지를 다시 처리하며, generation-service가 시도 번호·Job 상태로 중복을 무시한다.
             log.warning("job=%s: partition revoked during processing, skipping commit", request.job_id)
             return
         self.consumer.commit(message=msg, asynchronous=False)
