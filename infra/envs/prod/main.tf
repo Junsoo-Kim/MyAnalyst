@@ -3,13 +3,15 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  azs = slice(data.aws_availability_zones.available.names, 0, 2)
+  azs         = slice(data.aws_availability_zones.available.names, 0, 2)
+  name_prefix = "myanalyst-${var.environment}"
+  tags        = { Environment = var.environment }
 }
 
 module "network" {
   source = "../../modules/network"
 
-  name_prefix = "myanalyst-${var.environment}"
+  name_prefix = local.name_prefix
 
   azs                  = local.azs
   public_subnet_cidrs  = ["10.0.0.0/24", "10.0.1.0/24"]
@@ -19,16 +21,13 @@ module "network" {
 
   management_cidr = var.management_cidr
 
-  tags = {
-    Environment = var.environment
-  }
+  tags = local.tags
 }
 
-locals {
-  name_prefix = "myanalyst-${var.environment}"
-  tags        = { Environment = var.environment }
-}
+# --- 데이터 계층 ---
 
+# PostgreSQL 인스턴스 하나에 서비스별 database(user_db, report_db, generation_db, chat_db, dictionary_db)를 둔다.
+# database는 database_init.tf의 일회성 태스크가 만든다.
 module "rds" {
   source = "../../modules/rds"
 
@@ -38,6 +37,7 @@ module "rds" {
   tags               = local.tags
 }
 
+# api-gateway(로그인 rate limit), auth-service(refresh token), market-data(크롤링 캐시)
 module "elasticache" {
   source = "../../modules/elasticache"
 
@@ -47,27 +47,29 @@ module "elasticache" {
   tags               = local.tags
 }
 
+# 검색 데이터(Milvus + OpenSearch). knowledge 서비스만 읽는다.
 module "milvus_ec2" {
   source = "../../modules/milvus-ec2"
 
   name_prefix       = local.name_prefix
   subnet_id         = module.network.private_subnet_ids[0]
   security_group_id = module.network.milvus_security_group_id
-  key_name          = var.milvus_key_name
+  key_name          = var.ec2_key_name
   tags              = local.tags
 }
 
-module "ecr_be" {
-  source = "../../modules/ecr"
-  name   = "${local.name_prefix}-be"
-  tags   = local.tags
+module "kafka_ec2" {
+  source = "../../modules/kafka-ec2"
+
+  name_prefix       = local.name_prefix
+  subnet_id         = module.network.private_subnet_ids[0]
+  security_group_id = module.network.kafka_security_group_id
+  advertised_host   = "kafka.${module.ecs_cluster.namespace_name}"
+  key_name          = var.ec2_key_name
+  tags              = local.tags
 }
 
-module "ecr_rag" {
-  source = "../../modules/ecr"
-  name   = "${local.name_prefix}-rag-server"
-  tags   = local.tags
-}
+# --- 컴퓨팅 ---
 
 module "ecs_cluster" {
   source = "../../modules/ecs-cluster"
@@ -88,75 +90,43 @@ module "alb" {
   tags                = local.tags
 }
 
-module "ecs_service_be" {
-  source = "../../modules/ecs-service"
+# 서비스별 ECR 리포지토리. 이름은 CI(.github/workflows/deploy.yml)의 "${NAME_PREFIX}-${matrix.name}"과 같다.
+module "ecr" {
+  source   = "../../modules/ecr"
+  for_each = local.services
 
-  name_prefix                   = local.name_prefix
-  service_name                  = "be"
-  cluster_arn                   = module.ecs_cluster.cluster_arn
-  cluster_name                  = module.ecs_cluster.cluster_name
-  service_connect_namespace_arn = module.ecs_cluster.service_connect_namespace_arn
-  subnets                       = module.network.private_subnet_ids
-  security_group_id             = module.network.be_security_group_id
-
-  image          = "${module.ecr_be.repository_url}:${var.be_image_tag}"
-  container_port = 8080
-  cpu            = 512
-  memory         = 1024
-
-  environment = {
-    RAG_SERVER_URL             = "http://rag-server:8000"
-    CORS_ALLOWED_ORIGINS       = var.fe_origin
-    REDIS_HOST                 = module.elasticache.redis_endpoint
-    REDIS_PORT                 = tostring(module.elasticache.redis_port)
-    SPRING_DATASOURCE_URL      = "jdbc:postgresql://${module.rds.endpoint}:${module.rds.port}/${module.rds.db_name}"
-    SPRING_DATASOURCE_USERNAME = "postgres"
-  }
-  secrets = {
-    SPRING_DATASOURCE_PASSWORD = "${module.rds.master_user_secret_arn}:password::"
-  }
-
-  target_group_arn = module.alb.be_target_group_arn
-  capacity_provider_strategy = [
-    { capacity_provider = "FARGATE", weight = 1, base = 1 },
-  ]
-  min_capacity = 1
-  max_capacity = 4
-
+  name = "${local.name_prefix}-${each.key}"
   tags = local.tags
 }
 
-module "ecs_service_rag" {
-  source = "../../modules/ecs-service"
+# 서비스 정의는 services.tf
+module "service" {
+  source   = "../../modules/ecs-service"
+  for_each = local.services
 
   name_prefix                   = local.name_prefix
-  service_name                  = "rag-server"
+  service_name                  = each.key
   cluster_arn                   = module.ecs_cluster.cluster_arn
   cluster_name                  = module.ecs_cluster.cluster_name
   service_connect_namespace_arn = module.ecs_cluster.service_connect_namespace_arn
   subnets                       = module.network.private_subnet_ids
-  security_group_id             = module.network.rag_security_group_id
+  security_group_ids = concat(
+    [module.network.services_security_group_id],
+    each.value.public ? [module.network.gateway_security_group_id] : [],
+  )
 
-  image          = "${module.ecr_rag.repository_url}:${var.rag_image_tag}"
-  container_port = 8000
-  cpu            = 2048
-  memory         = 4096
+  image          = "${module.ecr[each.key].repository_url}:${var.image_tag}"
+  container_port = each.value.port
+  cpu            = each.value.cpu
+  memory         = each.value.memory
 
-  environment = {
-    MILVUS_HOST = module.milvus_ec2.private_ip
-    MILVUS_PORT = "19530"
-  }
-  secrets = {
-    OPENAI_API_KEY = var.openai_api_key_secret_arn
-  }
+  environment = each.value.environment
+  secrets     = each.value.secrets
 
-  target_group_arn = null
-  capacity_provider_strategy = [
-    { capacity_provider = "FARGATE", weight = 1, base = 1 },
-    { capacity_provider = "FARGATE_SPOT", weight = 4, base = 0 },
-  ]
-  min_capacity = 1
-  max_capacity = 6
+  target_group_arn           = each.value.public ? module.alb.gateway_target_group_arn : null
+  capacity_provider_strategy = each.value.spot ? local.spot_strategy : local.on_demand_strategy
+  min_capacity               = each.value.min_capacity
+  max_capacity               = each.value.max_capacity
 
   tags = local.tags
 }
@@ -168,12 +138,11 @@ module "github_oidc" {
   github_repo      = var.github_repo
   allowed_branches = ["main"]
 
-  ecr_repository_arns = [module.ecr_be.repository_arn, module.ecr_rag.repository_arn]
-  ecs_service_arns    = [module.ecs_service_be.service_arn, module.ecs_service_rag.service_arn]
-  passable_role_arns = [
-    module.ecs_service_be.execution_role_arn, module.ecs_service_be.task_role_arn,
-    module.ecs_service_rag.execution_role_arn, module.ecs_service_rag.task_role_arn,
-  ]
+  ecr_repository_arns = [for repo in module.ecr : repo.repository_arn]
+  ecs_service_arns    = [for svc in module.service : svc.service_arn]
+  passable_role_arns = flatten([
+    for svc in module.service : [svc.execution_role_arn, svc.task_role_arn]
+  ])
 
   tags = local.tags
 }
@@ -184,12 +153,36 @@ module "observability" {
   name_prefix = local.name_prefix
   alarm_email = var.alarm_email
 
-  alb_arn_suffix             = module.alb.arn_suffix
-  be_target_group_arn_suffix = module.alb.be_target_group_arn_suffix
-  rds_instance_id            = "${local.name_prefix}-postgres"
-  elasticache_cluster_id     = "${local.name_prefix}-redis"
-  ecs_cluster_name           = module.ecs_cluster.cluster_name
-  ecs_service_names          = [module.ecs_service_be.service_name, module.ecs_service_rag.service_name]
+  alb_arn_suffix                  = module.alb.arn_suffix
+  gateway_target_group_arn_suffix = module.alb.gateway_target_group_arn_suffix
+  rds_instance_id                 = "${local.name_prefix}-postgres"
+  elasticache_cluster_id          = "${local.name_prefix}-redis"
+  ecs_cluster_name                = module.ecs_cluster.cluster_name
+  ecs_service_names               = [for svc in module.service : svc.service_name]
+
+  kafka_metrics_namespace = module.kafka_ec2.metrics_namespace
+  kafka_lag_thresholds = {
+    # 워커는 긴 생성 중에 파티션을 멈춰 두므로 인스턴스당 몇 건은 정상이다.
+    "generation-worker"  = 20
+    "generation-tracker" = 100
+    "generation"         = 100
+    "report"             = 50
+    "dictionary"         = 100
+    "chat"               = 100
+  }
+  kafka_dlt_topics = [
+    "generation.requested.DLT",
+    "generation.progressed.DLT",
+    "generation.completed.DLT",
+    "generation.failed.DLT",
+    "job.status-changed.DLT",
+    "report.save-requested.DLT",
+    "report.created.DLT",
+  ]
+  ec2_instance_ids = {
+    kafka       = module.kafka_ec2.instance_id
+    search-data = module.milvus_ec2.instance_id
+  }
 
   tags = local.tags
 }

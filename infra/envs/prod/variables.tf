@@ -11,20 +11,20 @@ variable "environment" {
 }
 
 variable "management_cidr" {
-  description = "Milvus EC2 SSH 접근을 허용할 본인 공인 IP (예: 1.2.3.4/32). 비워두면(null) SSH를 열지 않습니다."
+  description = "Kafka·검색 데이터 EC2에 SSH 접근을 허용할 공인 IP (예: 1.2.3.4/32). 비워두면(null) SSH를 열지 않습니다(Kafka는 SSM으로도 접속 가능)."
   type        = string
   default     = null
 }
 
-variable "milvus_key_name" {
-  description = "Milvus EC2에 붙일 SSH 키페어 이름. null이면 키 없이 생성(콘솔 EC2 Instance Connect로만 접근)."
+variable "ec2_key_name" {
+  description = "Kafka·검색 데이터 EC2에 붙일 SSH 키페어 이름. null이면 키 없이 생성."
   type        = string
   default     = null
 }
 
 variable "openai_api_key_secret_arn" {
   description = <<-EOT
-    RAG 서버가 쓸 OPENAI_API_KEY가 저장된 Secrets Manager 시크릿의 ARN.
+    generation-worker, qa, stt가 쓸 OPENAI_API_KEY가 저장된 Secrets Manager 시크릿의 ARN.
     Terraform이 만들지 않고 미리 콘솔/CLI로 직접 만들어서 값을 여기 var로만 참조한다
     (API 키 평문이 tfvars나 state에 새로 기록되지 않게 하기 위함):
       aws secretsmanager create-secret --name myanalyst-prod/openai-api-key \
@@ -33,19 +33,20 @@ variable "openai_api_key_secret_arn" {
   type        = string
 }
 
-variable "be_image_tag" {
-  description = "ECR에 푸시된 BE 이미지 태그. 첫 apply 시점엔 리포지토리만 만들어지고 이미지가 없으므로,\nCI에서 이미지를 푸시한 뒤 ECS 서비스가 정상 기동한다."
+variable "image_tag" {
+  description = "모든 서비스가 처음 쓸 ECR 이미지 태그. 이후 배포는 CI가 커밋 SHA 태그로 태스크 정의를 갱신한다. 첫 apply 시점엔 리포지토리만 만들어지고 이미지가 없으므로, CI가 이미지를 푸시한 뒤 서비스가 기동한다."
   type        = string
   default     = "latest"
 }
 
-variable "rag_image_tag" {
-  type    = string
-  default = "latest"
+variable "llm_model" {
+  description = "generation-worker, qa가 쓸 OpenAI 모델"
+  type        = string
+  default     = "gpt-4o-mini"
 }
 
 variable "fe_origin" {
-  description = "BE의 CORS 허용 Origin. FE를 S3/CloudFront 등으로 배포하면 그 주소로 바꿀 것."
+  description = "api-gateway의 CORS 허용 Origin. FE를 S3/CloudFront 등으로 올리면 그 주소로 바꿀 것."
   type        = string
   default     = "http://localhost:3000"
 }

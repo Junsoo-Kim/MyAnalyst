@@ -13,9 +13,9 @@
 | 4 | api-gateway + auth-service + user-service, 세션 → JWT | 완료 | [stage4](stage4/README.md) |
 | 5 | 이벤트 소비 서비스 분리: notification, dictionary, chat | 완료 | [stage5](stage5/README.md) |
 | 6 | 핵심 분리: report, generation → BE 모놀리스 소멸, 서비스별 DB | 완료 | [stage6](stage6/README.md) |
-| 7 | 인프라: Terraform(ECS 서비스, Kafka EC2, Service Connect), 모니터링 | **다음** | – |
+| 7 | 인프라: Terraform(ECS 서비스, Kafka EC2, Service Connect), 모니터링 | 완료 | [stage7](stage7/README.md) |
 
-## 2. 현재 구조 (6단계 완료 시점)
+## 2. 현재 구조 (7단계 완료 시점)
 
 ```
 브라우저 ──▶ api-gateway :8080 ── JWT(RS256) 검증, X-User-Id 재작성, CORS, 로그인 rate limit (catch-all 없음)
@@ -45,6 +45,7 @@
 | qa / stt | `services/{qa,stt}` | Python, FastAPI | 8000 | 없음 |
 | python-common | `services/python-common` | Python 라이브러리 | – | – |
 
+- AWS 구성(Terraform)은 `infra/envs/prod`: 위 서비스 13개가 각각 ECS 서비스(Service Connect 이름 = 서비스 이름), Kafka와 Milvus·OpenSearch는 EC2(Cloud Map `kafka.<ns>`, `search-data.<ns>`), RDS 하나에 database 5개. 상세는 [infra/README.md](../../infra/README.md).
 - database는 모두 같은 PostgreSQL 인스턴스 안에 있다(D6). 새 볼륨이면 `scripts/postgres/init-databases.sql`이 만든다. `myanalystdb`는 6단계 이전의 공용 DB이며, 이전(`scripts/migrate/stage6_split_databases.sh`)의 원본으로만 남는다.
 
 ### Kafka 토픽 (모두 3파티션, 각 토픽에 `<topic>.DLT`)
@@ -108,39 +109,47 @@
 - RDS 하나에 database 5개(D6). 기존 RDS 데이터가 있다면 `scripts/migrate/stage6_split_databases.sh`의 순서(쓰기 중지 → 복사 → 전환)를 따른다. 스크립트는 `docker exec`를 쓰므로 RDS에서는 `psql`/`pg_dump`를 직접 부르는 형태로 바꿔야 한다.
 - market-data에 `REDIS_HOST`, Gateway에 `GENERATION_SERVICE_URL`, `REPORT_SERVICE_URL`, `MARKET_DATA_SERVICE_URL`을 넣는다(`BE_URL`은 없어졌다).
 
-### 7단계 — 인프라
+### 7단계 — 완료
 
-- `infra/envs/prod/main.tf`는 아직 `be`, `rag-server` 두 ECS 서비스 기준이다(둘 다 이제 없다). 서비스별 ECS 서비스(`modules/ecs-service` 재사용), ALB → api-gateway만 노출, 나머지는 Service Connect로 연결한다.
-- Kafka: EC2 단일 KRaft 브로커 모듈(`modules/milvus-ec2` 패턴 재사용). 환경 변수 `KAFKA_BOOTSTRAP_SERVERS`를 모든 소비·발행 서비스에 주입한다.
-- 비밀(D9): `INTERNAL_GATEWAY_TOKEN`, OpenAI 키, DB 비밀번호, auth-service JWK를 Secrets Manager로 관리하고 ECS 태스크 정의의 `secrets`로 주입한다.
-- 서비스 간 인증은 공유 비밀 유지(D10).
-- 제거: `RAG_SERVER_URL` 등 rag-server 시절 설정.
-- 모니터링: consumer lag(Kafka exporter + Prometheus), worker 지표(`worker_jobs_total`, `worker_rebalances_total`), DLT 적재량(`kafka.consumer.dead_lettered`).
-- 검증은 `terraform fmt -check`, `terraform validate`, `terraform plan`(자격 증명이 있을 때)까지 한다. `apply`는 하지 않는다(D8).
-- `infra/README.md`와 루트 `README.md`의 아키텍처 그림·구성 설명을 새 구조로 고친다. 배포 상태 서술은 넣지 않는다(§3 마지막 규칙).
-- CI(`.github/workflows/deploy.yml`)의 이미지 매트릭스는 이미 새 서비스를 포함한다(`be` 대신 generation-service, report-service).
+[stage7/README.md](stage7/README.md) 참고. 계획과 다르게 한 것:
+- 모니터링은 Kafka exporter + Prometheus 대신 브로커 호스트의 타이머 스크립트가 consumer lag·DLT 끝 offset을 CloudWatch로 올리고 CloudWatch 알람을 건다(Prometheus 서버를 따로 운영하지 않기 위해). 서비스·워커의 Prometheus 지표는 수집하지 않는다(공백).
+- OpenSearch(knowledge의 BM25)가 AWS 구성에 없어서 Milvus EC2에 함께 띄웠다.
+
+### 이후 과제 (정해진 단계 없음)
+
+§6 표의 "다음 과제" 항목이 후보다. 우선순위가 높은 것:
+- Kafka 데이터용 별도 EBS 볼륨(인스턴스 교체 시 토픽 데이터 유실 방지). 다중 브로커나 MSK 검토.
+- `terraform plan`을 자격 증명이 있는 환경에서 실행해 권한·리소스 오류 확인(D8: apply는 하지 않음).
+- 워커 계약 변경: 취소된 Job 알리기, 진행·완료·실패 순서 보장(같은 토픽으로 합치기 등). `contracts/`부터 고친다.
+- Saga 보상(`report.save-failed`).
 
 ## 6. 이월된 공백 (단계 기록에서 모음)
 
 | 출처 | 내용 | 다룰 단계 |
 |---|---|---|
 | 2 | compose의 Kafka에 볼륨이 없어 `down` 시 데이터 소실 | 필요 시 |
-| 3 | 진행/완료/실패가 서로 다른 토픽이라 토픽 간 순서 비보장(실패가 STARTED보다 먼저 오면 lease 만료까지 대기) | 7 이후(워커 계약 변경) |
-| 3 | 워커는 취소된 Job을 모르고 끝까지 생성함 | 7 이후(워커 계약 변경) |
+| 3 | 진행/완료/실패가 서로 다른 토픽이라 토픽 간 순서 비보장(실패가 STARTED보다 먼저 오면 lease 만료까지 대기) | 다음 과제(워커 계약 변경) |
+| 3 | 워커는 취소된 Job을 모르고 끝까지 생성함 | 다음 과제(워커 계약 변경) |
 | 3 | 뉴스 크롤러가 현재 네이버 HTML과 맞지 않음 | 아무 때나 |
 | 4 | 로그아웃 후에도 access token은 만료(15분)까지 유효 | 필요 시(jti denylist) |
-| 4 | Gateway와 auth-service가 동시에 재시작되면 JWKS를 받지 못해 모든 토큰 거부(미검증) | 7 |
+| 4 | Gateway와 auth-service가 동시에 재시작되면 JWKS를 받지 못해 모든 토큰 거부(미검증) | 다음 과제(공개키를 Gateway 설정으로도 주입) |
 | 4 | refresh token 재사용 감지 시 토큰 패밀리 폐기 없음 | 필요 시 |
-| 4 | 서비스 간 인증이 공유 비밀(`X-Internal-Token`) 수준 | 7(mTLS 등) |
+| 4 | 서비스 간 인증이 공유 비밀(`X-Internal-Token`) 수준. 7단계도 유지(D10) | 다음 과제(mTLS 등) |
 | 5 | 보고서 사본은 최종 일관성(저장 직후 10~70ms 동안 사전·채팅 404 가능, 재시도 없음) | 필요 시 |
 | 5 | SSE 구독은 없는/남의 Job이어도 열림(정보는 안 새지만 연결이 남음) | 필요 시 |
 | 5 | qa의 400을 chat-service가 500으로 응답(기존 동작) | 아무 때나 |
 | 5 | 새 Java 소비자에 계약 테스트 없음 | 필요 시 |
 | 6 | Saga 보상 없음: report-service 저장이 끝까지 실패하면(DLT) Job이 SAVING에 머묾 | 필요 시(`report.save-failed`) |
-| 6 | D11 `ask_llm` 예외화의 워커 전체 흐름(→ generation.failed → RETRYING)은 RAG 스택으로 확인하지 않음 | 7 |
-| 6 | 서비스별 database가 같은 인스턴스·같은 계정(접근 분리 없음) | 7(서비스별 DB 계정) |
+| 6 | D11 `ask_llm` 예외화의 워커 전체 흐름(→ generation.failed → RETRYING)은 RAG 스택으로 확인하지 않음 | 다음 과제 |
+| 6 | 서비스별 database가 같은 인스턴스·같은 계정(접근 분리 없음). 7단계 RDS도 마스터 계정 하나 | 다음 과제(서비스별 DB 계정) |
 | 6 | Swagger UI는 Gateway 경유로 열리지 않음 | 필요 시 |
-| 6 | market-data(Python)는 X-Internal-Token을 확인하지 않음 | 7 |
+| 6 | Python 서비스(market-data, qa, stt, knowledge)는 X-Internal-Token을 확인하지 않음 | 다음 과제 |
+| 7 | Kafka 데이터가 EC2 루트 볼륨에 있어 인스턴스 교체 시 토픽 데이터 유실, 브로커 1대(복제 1) | 다음 과제(별도 EBS, 다중 브로커/MSK) |
+| 7 | `terraform plan` 미실행(자격 증명 없음). Fargate에서 Cloud Map EC2 레코드 해석, ALB 뒤 SSE, database-init 태스크, 알람 발화는 실제로 확인하지 않음 | 다음 과제 |
+| 7 | 서비스·워커 Prometheus 지표를 AWS에서 수집하지 않음(Kafka lag·DLT만 CloudWatch) | 필요 시 |
+| 7 | knowledge-ingest(지식 베이스 적재)를 AWS에서 실행하는 경로 없음 | 필요 시 |
+| 7 | 모든 ECS 서비스가 SG 하나를 공유(서비스 간 네트워크 분리 없음) | 필요 시 |
+| 7 | 워커 섹션 체크포인트가 Fargate 임시 디스크에 있어 태스크 교체 시 처음부터 다시 생성 | 필요 시 |
 
 ## 7. 검증 환경 메모
 
@@ -162,4 +171,5 @@
 - MinIO는 Docker Hub 이미지가 사라져 Chainguard 이미지를 digest로 고정해 쓴다(root로 실행).
 - Windows Git Bash에서 `docker exec ... /opt/...`는 경로가 변환되므로 `MSYS_NO_PATHCONV=1`을 붙인다. 이때 다른 인자의 `/c/...` 경로도 변환되지 않으니 섞어 쓰지 않는다.
 - 한국어가 들어간 문자열을 셸 heredoc으로 Python에 넘기면 인코딩이 깨질 수 있다. 편집 스크립트는 파일로 작성해 실행한다.
+- Terraform: 로컬에 없으면 `docker run --rm -v "$PWD:/repo" -w /repo/infra/envs/prod hashicorp/terraform:1.9.8 <init -backend=false | validate>`. user data는 `templatefile`이므로 빈 디렉터리에서 `templatefile(...)`을 output으로 두고 `apply`하면 렌더링 결과를 볼 수 있다(stage7 E2). Kafka 지표 스크립트는 `DRY_RUN=1 KAFKA_CONTAINER=myanalyst-kafka bash infra/modules/kafka-ec2/templates/kafka-metrics.sh`로 로컬 브로커에 돌려 볼 수 있다.
 - 테스트: Java 서비스마다 `cd services/<svc> && ./mvnw clean test`(generation-service는 Docker 필요, Testcontainers). Python은 서비스 디렉터리마다 `python -m unittest discover -s tests`. knowledge는 torch·pymilvus가 필요해 자기 이미지 안에서 돌린다: `docker run --rm -w /app myanalyst/knowledge:local python -m unittest discover -s tests`.

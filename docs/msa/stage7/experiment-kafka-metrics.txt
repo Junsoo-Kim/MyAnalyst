@@ -1,0 +1,14 @@
+== E3 infra/modules/kafka-ec2/templates/kafka-metrics.sh against a local broker (apache/kafka:3.9.1, compose)
+   setup: report.created (3 partitions) 5 messages; report.created.DLT 2 messages; generation.requested.DLT empty
+          group chat consumed 2 of 5; group notification-1234 consumed 1 (per-instance group, must be excluded)
+   $ DRY_RUN=1 KAFKA_CONTAINER=myanalyst-kafka bash infra/modules/kafka-ec2/templates/kafka-metrics.sh
+   ConsumerLag Group=chat 3
+   DeadLetterMessages Topic=report.created.DLT 2
+   DeadLetterMessages Topic=generation.requested.DLT 0
+
+== E2 Kafka EC2 user data, rendered with terraform (templatefile, hashicorp/terraform:1.9.8) and run locally
+   rendered kafka-ec2 and milvus-ec2 user data: bash -n ok; the embedded docker-compose file for Milvus/OpenSearch: docker compose config ok
+   the rendered `docker run` (advertised host replaced with localhost, data dir on a volume chowned to 1000 as on EC2):
+   broker started; created report.created.DLT; producing to a missing topic -> UNKNOWN_TOPIC_OR_PARTITION (auto-create off)
+   JVM -Xmx1024m; /var/lib/kafka/data holds __cluster_metadata-0, checkpoints
+   rendered kafka-metrics.sh (as written by user data): DeadLetterMessages Topic=report.created.DLT 0

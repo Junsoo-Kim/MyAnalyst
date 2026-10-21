@@ -177,8 +177,9 @@ RAG 서버
 인프라
 
 - 컨테이너: Docker, Docker Compose(로컬), AWS ECS Fargate(배포)
-- IaC: Terraform (VPC/ECS/RDS/ElastiCache/ALB/관측성 등 모듈화)
-- AWS: ECS Fargate, ALB, RDS(PostgreSQL), ElastiCache(Redis), EC2(Milvus), ECR, CloudWatch, IAM(OIDC)
+- 메시징: Apache Kafka (KRaft), Spring Modulith 이벤트 레지스트리(Transactional Outbox)
+- IaC: Terraform (VPC/ECS/RDS/ElastiCache/ALB/Kafka EC2/관측성 등 모듈화)
+- AWS: ECS Fargate(서비스 13개, Service Connect), ALB, RDS(PostgreSQL, 서비스별 database), ElastiCache(Redis), EC2(Kafka, Milvus·OpenSearch), ECR, Secrets Manager, CloudWatch, IAM(OIDC)
 - CI/CD: GitHub Actions (OIDC 기반, 장기 AWS 액세스키 미사용)
 
 ## 기술적 도전과제
@@ -219,11 +220,11 @@ AWS Academy 교육을 계기로 직접 인프라를 배포·운영해보고자 �
 
 Solution:
 
-- 3계층 디커플링: 백엔드(Spring Boot), AI 연산(FastAPI), 데이터 계층(RDS/ElastiCache/Milvus)을 VPC 내에서 완전히 분리했습니다. 보안그룹은 "바로 앞 계층에서만" 인바운드를 허용하는 최소 권한 체인으로 설계했습니다 (인터넷 → ALB → BE → RAG → Milvus/RDS/Redis).
-- 컨테이너 오케스트레이션과 수평 확장: ECS Fargate로 BE/RAG를 각각 서비스화하고 CPU 사용률 기반 오토스케일링을 붙여, 인스턴스 분리만으로는 해결되지 않던 "계층 내부의 단일 인스턴스 SPOF"까지 줄였습니다.
-- 비용 최적화: RAG(임베딩 연산, 중단에 상대적으로 관대함)는 온디맨드 1개 + Fargate Spot 위주로, 진입점인 BE는 100% 온디맨드로 구성해 안정성과 비용을 나눠 가져갔습니다.
-- 관측성: ALB 5xx/헬스체크, RDS, ElastiCache, ECS 서비스별 CloudWatch 알람을 SNS로 연결해, 장애를 사후 복구가 아니라 사전에 감지할 수 있게 했습니다.
-- CI/CD와 보안: GitHub Actions가 장기 보관되는 AWS 액세스키 없이 OIDC로 임시 자격증명만 받아 배포하도록 구성했고, 그 IAM 역할의 권한도 ECR 푸시/해당 ECS 서비스 업데이트로만 좁혔습니다.
+- 계층 분리: 진입점(ALB → api-gateway), 서비스 계층(ECS Fargate 서비스 13개, Service Connect), 데이터 계층(RDS/ElastiCache/Kafka EC2/Milvus·OpenSearch EC2)을 VPC 안에서 나눴습니다. 보안그룹은 "바로 앞 계층에서만" 인바운드를 허용하는 체인입니다 (인터넷 → ALB → api-gateway → 서비스 → 데이터 계층). 구성 상세는 [infra/README.md](infra/README.md).
+- 컨테이너 오케스트레이션과 수평 확장: 서비스마다 ECS 서비스로 두고 CPU 사용률 기반 오토스케일링을 붙여, 인스턴스 분리만으로는 해결되지 않던 "계층 내부의 단일 인스턴스 SPOF"까지 줄였습니다. 서비스 사이의 비동기 흐름(보고서 생성, 저장 Saga, 사본 동기화)은 Kafka로 잇습니다.
+- 비용 최적화: 다시 해도 되는 연산(검색, 생성 워커, Q&A, STT)은 온디맨드 1개 + Fargate Spot 위주로, 진입점과 상태 전이를 맡는 서비스는 온디맨드로 구성해 안정성과 비용을 나눠 가져갔습니다.
+- 관측성: ALB 5xx/헬스체크, RDS, ElastiCache, ECS 서비스별 CPU에 더해 Kafka consumer lag(그룹별)와 DLT 신규 메시지(토픽별) CloudWatch 알람을 SNS로 연결해, 장애를 사후 복구가 아니라 사전에 감지할 수 있게 했습니다.
+- CI/CD와 보안: GitHub Actions가 장기 보관되는 AWS 액세스키 없이 OIDC로 임시 자격증명만 받아 배포하도록 구성했고, 그 IAM 역할의 권한도 ECR 푸시/해당 ECS 서비스 업데이트로만 좁혔습니다. OpenAI 키, 서비스 간 공유 비밀, JWT 서명 키는 Secrets Manager에서 태스크에 주입합니다.
 - 점진적으로 켤 수 있는 설계: 도메인이 아직 없어 HTTPS는 ACM 인증서 ARN의 유무로 켜지고 꺼지는 조건부 리소스로 만들어뒀습니다 - 나중에 인증서만 발급받으면 코드 변경 없이 활성화됩니다.
 
 Achievement:

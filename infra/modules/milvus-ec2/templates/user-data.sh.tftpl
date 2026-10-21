@@ -1,0 +1,20 @@
+#!/bin/bash
+set -eux
+dnf install -y docker
+systemctl enable --now docker
+
+curl -SL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+  -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+mkdir -p /opt/milvus /data/etcd /data/minio /data/milvus /data/opensearch
+chown 1000:1000 /data/opensearch
+# OpenSearch는 mmap 영역이 많이 필요하다.
+sysctl -w vm.max_map_count=262144
+echo 'vm.max_map_count=262144' > /etc/sysctl.d/99-opensearch.conf
+cat > /opt/milvus/docker-compose.yml <<'COMPOSE'
+${compose_file}
+COMPOSE
+
+cd /opt/milvus
+/usr/local/bin/docker-compose up -d

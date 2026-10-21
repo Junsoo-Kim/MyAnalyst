@@ -18,23 +18,10 @@ data "aws_ami" "al2023" {
 }
 
 locals {
-  user_data = <<-EOF
-    set -eux
-    dnf install -y docker
-    systemctl enable --now docker
-
-    curl -SL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
-      -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-
-    mkdir -p /opt/milvus /data/etcd /data/minio /data/milvus
-    cat > /opt/milvus/docker-compose.yml <<'COMPOSE'
-    ${file("${path.module}/templates/milvus-compose.yml")}
-    COMPOSE
-
-    cd /opt/milvus
-    /usr/local/bin/docker-compose up -d
-  EOF
+  # cloud-init은 #!로 시작하는 user data만 스크립트로 실행한다(이전에는 shebang이 없어 실행되지 않았다).
+  user_data = templatefile("${path.module}/templates/user-data.sh.tftpl", {
+    compose_file = file("${path.module}/templates/milvus-compose.yml")
+  })
 }
 
 resource "aws_instance" "milvus" {

@@ -1,0 +1,55 @@
+#!/bin/bash
+set -eux
+dnf install -y docker
+systemctl enable --now docker
+
+# apache/kafka 이미지는 uid 1000(appuser)으로 돈다.
+mkdir -p /data/kafka
+chown 1000:1000 /data/kafka
+
+docker run -d --name kafka --restart always -p 9092:9092 \
+  -v /data/kafka:/var/lib/kafka/data \
+  -e KAFKA_NODE_ID=1 \
+  -e KAFKA_PROCESS_ROLES=broker,controller \
+  -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+  -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://${advertised_host}:9092 \
+  -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT \
+  -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+  -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+  -e KAFKA_LOG_DIRS=/var/lib/kafka/data \
+  -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+  -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+  -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+  -e KAFKA_AUTO_CREATE_TOPICS_ENABLE=false \
+  -e KAFKA_HEAP_OPTS="-Xms${heap_mb}m -Xmx${heap_mb}m" \
+  ${kafka_image}
+
+# consumer lag / DLT 적재량 → CloudWatch (1분마다)
+cat > /usr/local/bin/kafka-metrics.sh <<'SCRIPT'
+${metrics_script}
+SCRIPT
+chmod +x /usr/local/bin/kafka-metrics.sh
+
+cat > /etc/systemd/system/kafka-metrics.service <<'UNIT'
+[Unit]
+Description=Publish Kafka consumer lag and DLT counts to CloudWatch
+After=docker.service
+[Service]
+Type=oneshot
+Environment=AWS_DEFAULT_REGION=${region}
+Environment=NAMESPACE=${metrics_namespace}
+ExecStart=/usr/local/bin/kafka-metrics.sh
+UNIT
+
+cat > /etc/systemd/system/kafka-metrics.timer <<'UNIT'
+[Unit]
+Description=Run kafka-metrics every minute
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+[Install]
+WantedBy=timers.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now kafka-metrics.timer

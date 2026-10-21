@@ -135,6 +135,8 @@ OpenSearch 기본(standard) 분석기는 한국어 조사를 못 뗀다("영업�
 > 6단계로 BE 모놀리스가 사라졌다. 아래 `[generation]`은 generation-service, `[report]`는 report-service이고,
 > 보고서 저장은 직접 호출 대신 명령 토픽 `report.save-requested`를 거치는 Saga다(Job은 SAVING을 거쳐 SUCCEEDED).
 > 서비스마다 자기 database를 쓴다. 상세는 [docs/msa/stage6/README.md](docs/msa/stage6/README.md).
+> 7단계로 AWS 구성(Terraform)이 이 서비스 구성에 맞춰졌다(서비스별 ECS 서비스, Kafka EC2, Secrets Manager, Kafka lag·DLT 알람).
+> 상세는 [docs/msa/stage7/README.md](docs/msa/stage7/README.md), [infra/README.md](infra/README.md).
 
 ```text
 React → POST /report-jobs (202)

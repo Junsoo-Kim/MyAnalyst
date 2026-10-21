@@ -13,12 +13,15 @@ resource "aws_lb" "this" {
   load_balancer_type = "application"
   subnets            = var.public_subnet_ids
   security_groups    = [var.security_group_id]
+  # 보고서 생성 진행(SSE)은 이벤트 사이에 1분 넘게 조용할 수 있다. 기본 60초면 ALB가 연결을 끊는다.
+  idle_timeout = var.idle_timeout_seconds
 
   tags = merge(var.tags, { Name = "${var.name_prefix}-alb" })
 }
 
-resource "aws_lb_target_group" "be" {
-  name        = "${var.name_prefix}-be-tg"
+# 외부에 노출하는 것은 api-gateway 하나다. 나머지 서비스는 Service Connect로만 닿는다.
+resource "aws_lb_target_group" "gateway" {
+  name        = "${var.name_prefix}-gateway-tg"
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -33,7 +36,7 @@ resource "aws_lb_target_group" "be" {
     matcher             = "200"
   }
 
-  tags = merge(var.tags, { Name = "${var.name_prefix}-be-tg" })
+  tags = merge(var.tags, { Name = "${var.name_prefix}-gateway-tg" })
 }
 
 resource "aws_lb_listener" "http" {
@@ -45,7 +48,7 @@ resource "aws_lb_listener" "http" {
     for_each = var.acm_certificate_arn == null ? [1] : []
     content {
       type             = "forward"
-      target_group_arn = aws_lb_target_group.be.arn
+      target_group_arn = aws_lb_target_group.gateway.arn
     }
   }
 
@@ -73,6 +76,6 @@ resource "aws_lb_listener" "https" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.be.arn
+    target_group_arn = aws_lb_target_group.gateway.arn
   }
 }

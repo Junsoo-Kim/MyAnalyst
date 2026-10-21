@@ -72,7 +72,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     # The Python services build from ./services so their images can include services/python-common.
-    # ECS services for the split Python services are added to Terraform in MSA stage 7.
+    # Each entry has an ECR repository, task definition family and ECS service named ${NAME_PREFIX}-<name> (infra/envs/prod/services.tf).
     strategy:
       matrix:
         include:

@@ -25,3 +25,9 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "idle_timeout_seconds" {
+  description = "ALB 유휴 연결 타임아웃. SSE 구독이 섹션 생성 사이에 끊기지 않도록 기본값(60)보다 길게 둔다."
+  type        = number
+  default     = 300
+}
