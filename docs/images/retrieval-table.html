@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>검색 품질 개선 전후</title>
+<!--
+  README 3번 도전과제용 표. 수치는 services/knowledge/evals/results/*.json(RETRIEVAL_COMPARISON.md)과 같다.
+  개선 전 = Dense 단독, 개선 후 = Dense + BM25 하이브리드(RRF).
+  Hit@20, Hit@10 = 자체 데이터(셀트리온 뉴스 질의 900개), Recall@20, nDCG@10 = 공개 벤치마크(Ko-StrategyQA 질의 592개).
+  PNG 만들기: python docs/images/build_table.py
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Pretendard, 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    color: #1F2328; background: #FFFFFF; width: 900px; padding: 24px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 16px; }
+  thead th {
+    background: #F3F4F6; color: #5F6673; font-weight: 600; font-size: 14px;
+    padding: 13px 18px; border-top: 1px solid #D5D9E0; border-bottom: 1px solid #D5D9E0;
+  }
+  th:first-child, td:first-child { text-align: left; width: 50%; }
+  th, td { text-align: center; }
+  td { padding: 17px 18px; border-bottom: 1px solid #D5D9E0; }
+  td.before { color: #5F6673; }
+  td.after { font-weight: 800; }
+</style>
+</head>
+<body>
+  <table>
+    <thead>
+      <tr><th>지표</th><th>개선 전</th><th>개선 후</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Hit@20</td><td class="before">48.2%</td><td class="after">91.9%</td></tr>
+      <tr><td>Hit@10</td><td class="before">41.9%</td><td class="after">87.3%</td></tr>
+      <tr><td>Recall@20</td><td class="before">46.7%</td><td class="after">75.0%</td></tr>
+      <tr><td>nDCG@10</td><td class="before">0.287</td><td class="after">0.506</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>

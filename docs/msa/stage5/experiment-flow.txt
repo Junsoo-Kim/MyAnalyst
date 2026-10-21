@@ -1,0 +1,28 @@
+== E1 report -> report.created -> dictionary/chat copies
+   job 03407825-94d6-49a9-943b-bcdfa90dd445 SUCCEEDED, reportId=3
+   GET /reports/3/dictionary (alice) 200 after 0.01s (polled 0.01s): [{'term': 'PER', 'explanation': 'Price to earnings ratio'}, {'term': 'EV/EBITDA', 'explanation': 'Enterprise value multiple'}]
+   copies: dictionary_reports|alice-d76879 | chat_reports|alice-d76879 content=540
+== E2 ownership from the event copy (no call to BE)
+   dictionary bob -> 403
+   dictionary unknown report -> 404
+   POST /chat alice -> 200 {'answer': '스텁 답변: 보고서에 따르면 4분기 실적은 개선되었습니다.'}
+   POST /chat bob -> 403
+   GET /reports/{id}/chat alice -> (200, [{'chatid': 1, 'question': 'PER이 뭐야?', 'answer': '스텁 답변: 보고서에 따르면 4분기 실적은 개선되었습니다.'}])
+   GET /reports/{id}/chat bob -> 403
+== E3 SSE through notification-service, filtered by job owner
+   alice: HTTP 200, events: ['RUNNING/10', 'RUNNING/50', 'SUCCEEDED/100']
+   bob (same jobId): HTTP 200, events: 0
+   alice subscribing after completion gets the last snapshot: ['SUCCEEDED']
+== E4 delete -> ReportDeleted on report.created (same key) -> copies and chat history removed
+   DELETE /reports/{id} -> 200
+   dictionary 404 after 0.07s, chat 404 after 0.01s
+   rows left: 0|0|0|0
+== E5 voice question (POST /chat/stt -> stt -> qa)
+   POST /chat/stt owner -> (200, '{"question":"셀트리온의 4분기 실적은 어땠나요?","answer":"스텁 답변: 보고서에 따르면 4분기 실적은 개선되었습니다."}')
+   POST /chat/stt other user -> (403, 'You do not have access to this report')
+== E6 BE (report/generation) stopped: report 5 owned by the caller
+   GET /reports/{id} (BE) -> 503
+   GET /reports/{id}/dictionary -> 200
+   POST /chat -> 200 {'answer': '스텁 답변: 보고서에 따르면 4분기 실적은 개선되었습니다.'}
+   GET /reports/{id}/chat -> 200
+   BE restarted, GET /reports/{id} 200 again after 7s

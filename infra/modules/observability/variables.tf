@@ -12,7 +12,7 @@ variable "alb_arn_suffix" {
   type = string
 }
 
-variable "be_target_group_arn_suffix" {
+variable "gateway_target_group_arn_suffix" {
   type = string
 }
 
@@ -29,11 +29,31 @@ variable "ecs_cluster_name" {
 }
 
 variable "ecs_service_names" {
-  description = "CPU 알람을 걸 ECS 서비스 이름 목록 (be, rag-server)"
+  description = "CPU 알람을 걸 ECS 서비스 이름 목록"
   type        = list(string)
 }
 
 variable "tags" {
   type    = map(string)
   default = {}
+}
+
+variable "kafka_metrics_namespace" {
+  description = "kafka-ec2 모듈의 지표 네임스페이스"
+  type        = string
+}
+
+variable "kafka_lag_thresholds" {
+  description = "consumer group -> 10분 연속 넘으면 알릴 lag"
+  type        = map(number)
+}
+
+variable "kafka_dlt_topics" {
+  description = "새 메시지가 들어오면 알릴 DLT 토픽"
+  type        = list(string)
+}
+
+variable "ec2_instance_ids" {
+  description = "상태 검사 알람을 걸 EC2 (이름 -> 인스턴스 ID)"
+  type        = map(string)
 }

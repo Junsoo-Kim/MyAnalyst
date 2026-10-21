@@ -1,0 +1,24 @@
+== E8 fresh volume: init script creates the databases; stage 5 flow (stage5_flow.py flow) as a regression run
+      user_db: users
+      report_db: event_publication, reports
+      generation_db: event_publication, report_job_attempt, report_jobs
+      chat_db: chat_reports, chats
+      dictionary_db: dictionary, dictionary_reports
+      myanalystdb: (empty on a fresh volume)
+   == E1 report -> report.created -> dictionary/chat copies
+      job 8c607318-158d-43f9-b47d-7a32495509e9 SUCCEEDED, reportId=3
+      GET /reports/3/dictionary (alice) 200 after 0.03s (polled 0.03s): [{'term': 'PER', 'explanation': 'Price to earnings ratio'}, {'term': 'EV/EBITDA', 'explanation': 'Enterprise value multiple'}]
+   == E2 ownership from the event copy (no call to BE)
+      dictionary bob -> 403
+      dictionary unknown report -> 404
+      POST /chat alice -> 200 {'answer': '스텁 답변: 보고서에 따르면 4분기 실적은 개선되었습니다.'}
+      POST /chat bob -> 403
+      GET /reports/{id}/chat alice -> (200, [{'chatid': 2, 'question': 'PER이 뭐야?', 'answer': '스텁 답변: 보고서에 따르면 4분기 실적은 개선되었습니다.'}])
+      GET /reports/{id}/chat bob -> 403
+   == E3 SSE through notification-service, filtered by job owner
+      alice: HTTP 200, events: ['RUNNING/10', 'RUNNING/50', 'SAVING/99', 'SUCCEEDED/100']
+      bob (same jobId): HTTP 200, events: 0
+      alice subscribing after completion gets the last snapshot: ['SUCCEEDED']
+   == E4 delete -> ReportDeleted on report.created (same key) -> copies and chat history removed
+      DELETE /reports/{id} -> 200
+      dictionary 404 after 0.02s, chat 404 after 0.01s

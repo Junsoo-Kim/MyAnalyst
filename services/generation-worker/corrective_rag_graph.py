@@ -115,7 +115,7 @@ def node_generate_keywords(state: SectionState) -> Dict[str, Any]:
 
 def node_retrieve(state: SectionState) -> Dict[str, Any]:
     # 임베딩·하이브리드 검색은 knowledge-service가 한다. 검색 서비스에 닿지 못하면 예외가 올라가
-    # 이번 생성 시도가 실패하고(generation.failed) BE가 재시도를 예약한다.
+    # 이번 생성 시도가 실패하고(generation.failed) generation-service가 재시도를 예약한다.
     docs = knowledge_client.search(state["keywords"], top_k=config.SEARCH_TOP_K)
     return {"retrieved_docs": docs}
 

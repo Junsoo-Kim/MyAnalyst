@@ -3,14 +3,14 @@ output "dns_name" {
   value       = aws_lb.this.dns_name
 }
 
-output "be_target_group_arn" {
-  value = aws_lb_target_group.be.arn
+output "gateway_target_group_arn" {
+  value = aws_lb_target_group.gateway.arn
 }
 
 output "arn_suffix" {
   value = aws_lb.this.arn_suffix
 }
 
-output "be_target_group_arn_suffix" {
-  value = aws_lb_target_group.be.arn_suffix
+output "gateway_target_group_arn_suffix" {
+  value = aws_lb_target_group.gateway.arn_suffix
 }

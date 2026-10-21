@@ -21,19 +21,16 @@ services:
 
   minio:
     container_name: milvus-minio
-    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    # minio/minio 이미지는 Docker Hub에서 내려갔다. 로컬 docker-compose와 같은 Chainguard 빌드(digest 고정)를 쓴다.
+    image: cgr.dev/chainguard/minio@sha256:cff197fef764642223ef9f4444c903d51aee9b544a7be8bc007fef6b7b00d136
+    user: "0:0"
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
     volumes:
       - /data/minio:/minio_data
-    command: minio server /minio_data --console-address ":9001"
+    command: ["server", "/minio_data", "--console-address", ":9001"]
     restart: always
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
 
   standalone:
     container_name: milvus-standalone
@@ -59,6 +56,21 @@ services:
     depends_on:
       - etcd
       - minio
+
+  # knowledge 서비스의 BM25 색인. 로컬 docker-compose의 opensearch와 같은 설정.
+  opensearch:
+    container_name: opensearch
+    image: opensearchproject/opensearch:2.17.1
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms1g -Xmx1g"
+    volumes:
+      - /data/opensearch:/usr/share/opensearch/data
+    restart: always
+    ports:
+      - "9200:9200"
 
 networks:
   default:

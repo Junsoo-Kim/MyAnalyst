@@ -3,7 +3,7 @@ variable "name_prefix" {
 }
 
 variable "subnet_id" {
-  description = "Milvus를 배치할 프라이빗 서브넷 1개 (network 모듈의 private_subnet_ids[0])"
+  description = "검색 데이터 인스턴스를 배치할 프라이빗 서브넷 1개 (network 모듈의 private_subnet_ids[0])"
   type        = string
 }
 
@@ -13,13 +13,13 @@ variable "security_group_id" {
 }
 
 variable "instance_type" {
-  description = "etcd+minio+milvus standalone을 한 인스턴스에서 같이 돌리기 위한 최소 권장 사양(8GB RAM 이상)"
+  description = "etcd+minio+milvus standalone과 OpenSearch(힙 1GB)를 한 인스턴스에서 같이 돌리는 사양(16GB RAM)"
   type        = string
-  default     = "t3.large"
+  default     = "t3.xlarge"
 }
 
 variable "root_volume_size_gb" {
-  description = "루트 볼륨 크기. Milvus 데이터/etcd/minio가 전부 이 볼륨에 저장된다."
+  description = "루트 볼륨 크기. Milvus 데이터/etcd/minio/OpenSearch가 전부 이 볼륨에 저장된다."
   type        = number
   default     = 100
 }

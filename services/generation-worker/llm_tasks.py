@@ -83,11 +83,10 @@ def ask_llm(query: str, context: str = "", base_prompt: str = prompts.BASE_PROMP
         answer = response.choices[0].message.content.strip()
         return answer
     except OpenAIError as oai_err:
+        # 오류 문구를 답변처럼 돌려주면 그 문구가 보고서 본문에 들어간 채 "성공"으로 저장된다.
+        # 예외로 올려 이번 시도를 실패시키고(worker → generation.failed, retryable) generation-service가 재시도하게 한다.
         print(f"OpenAI API Error: {oai_err}")
-        return f"OpenAI API 오류가 발생했습니다: {oai_err}"
-    except Exception as e:
-        print(f"Error calling OpenAI API: {e}")
-        return "LLM 호출 중 오류가 발생했습니다."
+        raise
 
 def generate_keywords_for_section(section_number: str, section_title: str, company="셀트리온", date="24년 4분기") -> str:
     """Uses LLM to generate search keywords for a specific report section."""

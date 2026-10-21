@@ -1,0 +1,34 @@
+%%{init: {"theme": "base", "securityLevel": "loose", "themeVariables": {"fontFamily": "'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif", "fontSize": "16px", "primaryColor": "#FFFFFF", "primaryBorderColor": "#D5D9E0", "primaryTextColor": "#1F2328", "lineColor": "#8A93A3", "clusterBkg": "#F3F4F6", "clusterBorder": "#E3E6EB", "titleColor": "#2B579A", "edgeLabelBackground": "#FFFFFF", "labelBackground": "#FFFFFF", "tertiaryColor": "#F3F4F6", "secondaryColor": "#F3F4F6"}, "flowchart": {"curve": "basis", "nodeSpacing": 36, "rankSpacing": 44, "padding": 16, "htmlLabels": true, "wrappingWidth": 320}}}%%
+flowchart LR
+  IN(["{{kafka}}<br/><b>생성 요청</b>"]):::bus
+
+  subgraph SECTION["보고서 섹션마다 실행 · LangGraph 상태 그래프"]
+    GK["{{openai}}<br/><b>검색 키워드 생성</b><br/><i>generate_keywords</i>"]
+    RT["{{milvus,opensearch}}<br/><b>하이브리드 검색</b><br/><i>retrieve</i>"]:::search
+    GD["{{openai}}<br/><b>문서 관련성 채점</b><br/><i>grade_documents</i>"]:::judge
+    GS["{{openai}}<br/><b>섹션 작성</b><br/><i>generate_section</i>"]
+    GH["{{openai}}<br/><b>근거 검증</b><br/><i>grade_hallucination</i>"]:::judge
+    RQ["{{openai}}<br/><b>검색어 재작성</b><br/><i>rewrite_query</i>"]
+  end
+
+  CP["{{python,kafka}}<br/><b>섹션 완료</b><br/>체크포인트 · 진행률"]:::bus
+  OUT(["{{kafka}}<br/><b>완료 발행</b>"]):::bus
+
+  IN --> GK
+  GK --> RT
+  RT --> GD
+  GD --> GS
+  GS --> GH
+  GH -- "근거 부족<br/>(최대 2회)" --> RQ
+  RQ -- "다시 검색" --> RT
+  GH -- "근거 충분" --> CP
+  CP -. "다음 섹션" .-> GK
+  CP -- "마지막 섹션" --> OUT
+
+  classDef default fill:#FFFFFF,stroke:#D5D9E0,stroke-width:1px,color:#1F2328
+  classDef bus fill:#EAF0F8,stroke:#2B579A,stroke-width:1.5px,color:#1F2328
+  classDef search fill:#EAF0F8,stroke:#B9C9E3,color:#1F2328
+  classDef judge fill:#FFFFFF,stroke:#2B579A,stroke-width:2px,color:#1F2328
+  linkStyle 5,6 stroke:#2B579A,stroke-width:2px
+  linkStyle 8 stroke:#8A93A3,stroke-width:1.5px,stroke-dasharray:5 4
+  style SECTION fill:#F3F4F6,stroke:#E3E6EB,color:#2B579A

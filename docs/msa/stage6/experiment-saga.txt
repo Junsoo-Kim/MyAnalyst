@@ -1,0 +1,19 @@
+== E2 saga: generation.completed -> SAVING + report.save-requested -> report-service -> report.created -> SUCCEEDED
+   SSE: ['RUNNING/10 Generating report', 'RUNNING/50 Generating section 1', 'SAVING/99 Saving report', 'SUCCEEDED/100 Report generated']
+   SUCCEEDED, reportId=35 (0.04s after the completion was produced)
+   report_db rows for this job: 1
+   dictionary -> 200
+== E2b message headers (D11: no __TypeId__)
+   report.save-requested: 1 record(s), headers of the last: event-version:1,event-type:ReportSaveRequested,spring_json_header_types:{"event-type":"java.lang.String","event-version":"java.lang.String"}
+   report.created: 1 record(s), headers of the last: event-version:1,event-type:ReportCreated,spring_json_header_types:{"event-type":"java.lang.String","event-version":"java.lang.String"}
+   job.status-changed: 4 record(s), headers of the last: event-version:1,event-type:ReportJobStatusChanged,spring_json_header_types:{"event-type":"java.lang.String","event-version":"java.lang.String"}
+   save command fields: ['chapter', 'company', 'content', 'date', 'indicator', 'jobId', 'terms', 'title', 'userId']
+== E3 report-service stopped while a job completes
+   job -> SAVING 99 Saving report
+   GET /reports -> 503
+   POST /report-jobs/{id}/cancel while SAVING -> (409, '{"message":"The report is already being saved"}')
+   after 20s still: SAVING | report rows: 0
+   report-service started -> SUCCEEDED after 6.9s (container start included), reportId=36, report rows: 1
+== E4 redelivery
+   generation.completed x3 -> save commands: 1 | report rows: 1
+   save command redelivered x2 -> report rows: 1 | report.created records for the report: 1 | job: SUCCEEDED 37

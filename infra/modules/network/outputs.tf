@@ -15,18 +15,23 @@ output "alb_security_group_id" {
   value       = aws_security_group.alb.id
 }
 
-output "be_security_group_id" {
-  description = "BE(Spring Boot) ECS 서비스에 붙일 SG"
-  value       = aws_security_group.be.id
+output "gateway_security_group_id" {
+  description = "api-gateway ECS 서비스에 services SG와 함께 붙일 SG (ALB -> 8080)"
+  value       = aws_security_group.gateway.id
 }
 
-output "rag_security_group_id" {
-  description = "RAG(FastAPI) ECS 서비스에 붙일 SG"
-  value       = aws_security_group.rag.id
+output "services_security_group_id" {
+  description = "모든 ECS 서비스에 붙일 SG (서비스 간 Service Connect 트래픽)"
+  value       = aws_security_group.services.id
+}
+
+output "kafka_security_group_id" {
+  description = "Kafka EC2 인스턴스에 붙일 SG"
+  value       = aws_security_group.kafka.id
 }
 
 output "milvus_security_group_id" {
-  description = "Milvus EC2 인스턴스에 붙일 SG"
+  description = "검색 데이터 EC2(Milvus, OpenSearch)에 붙일 SG"
   value       = aws_security_group.milvus.id
 }
 

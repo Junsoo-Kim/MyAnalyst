@@ -1,0 +1,25 @@
+== E0 stage 5 stack seeded (shared myanalystdb), writers stopped, then: scripts/migrate/stage6_split_databases.sh
+   == 1. preconditions (myanalystdb)
+      incomplete event publications: 0
+   == 2. reconcile report copies in the shared database (stage 5 script)
+   == 3. create the per-service databases
+   == 4. copy tables (schema + data + owned sequences)
+   == 5. generation_db: allow the new SAVING status
+   == 6. row counts (source -> target)
+      users: 5 -> user_db 5
+      reports: 26 -> report_db 26
+      report_jobs: 33 -> generation_db 33
+      report_job_attempt: 32 -> generation_db 32
+      chats: 1 -> chat_db 1
+      chat_reports: 26 -> chat_db 26
+      dictionary: 52 -> dictionary_db 52
+      dictionary_reports: 26 -> dictionary_db 26
+   done. myanalystdb was not modified except for step 2.
+== E1 data migrated from myanalystdb (user hank-94d2ea, created on the stage 5 stack)
+   GET /reports -> 200 [{'reportid': 32, 'title': 'kept with chat'}]
+   GET /reports/32 -> 200 content length 540
+   GET /reports/32/dictionary -> (200, [{'term': 'PER', 'explanation': 'Price to earnings ratio'}, {'term': 'EV/EBITDA', 'explanation': 'Enterprise value multiple'}])
+   GET /reports/32/chat -> (200, [{'chatid': 2, 'question': '영업이익률은 어때?', 'answer': '스텁 답변: 보고서에 따르면 4분기 실적은 개선되었습니다.'}])
+   job left QUEUED before the migration: 26c19de5-e8ee-4b35-91db-7502ba017971 QUEUED
+   another user: /reports/32 -> 403 , dictionary -> 403
+   new report after the migration gets id 33 (ids continue from the copied sequence)

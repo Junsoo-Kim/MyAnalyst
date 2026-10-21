@@ -64,3 +64,10 @@ crash.log
 
 # Personal notes
 MSA_PLAN.md
+
+# Retrieval evaluation corpus: crawled news text (copyrighted), rebuilt locally by build_retrieval_dataset.py
+services/knowledge/evals/data/*.local.jsonl
+
+# 다이어그램 빌드 중간 산출물 (build_diagram.py가 *.src.mmd에서 생성)
+docs/images/*.mmd
+!docs/images/*.src.mmd

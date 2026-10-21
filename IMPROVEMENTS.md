@@ -129,6 +129,14 @@ OpenSearch 기본(standard) 분석기는 한국어 조사를 못 뗀다("영업�
 > 상세는 [docs/msa/stage2/README.md](docs/msa/stage2/README.md).
 > 3단계로 `rag_server`가 `services/` 아래 Python 서비스 5개(+공용 라이브러리)로 나뉘었고, 보고서 생성은 BE가 HTTP로
 > 기다리지 않고 generation-worker가 Kafka로 받아 처리한다. 상세는 [docs/msa/stage3/README.md](docs/msa/stage3/README.md).
+> 5단계로 아래 흐름의 `[dictionary]`, `[notification]`(그리고 채팅)은 BE 밖의 dictionary-service, notification-service,
+> chat-service가 됐다. 각자 `report.created`·`job.status-changed`로 받은 사본으로 소유권을 판단한다.
+> 상세는 [docs/msa/stage5/README.md](docs/msa/stage5/README.md).
+> 6단계로 BE 모놀리스가 사라졌다. 아래 `[generation]`은 generation-service, `[report]`는 report-service이고,
+> 보고서 저장은 직접 호출 대신 명령 토픽 `report.save-requested`를 거치는 Saga다(Job은 SAVING을 거쳐 SUCCEEDED).
+> 서비스마다 자기 database를 쓴다. 상세는 [docs/msa/stage6/README.md](docs/msa/stage6/README.md).
+> 7단계로 AWS 구성(Terraform)이 이 서비스 구성에 맞춰졌다(서비스별 ECS 서비스, Kafka EC2, Secrets Manager, Kafka lag·DLT 알람).
+> 상세는 [docs/msa/stage7/README.md](docs/msa/stage7/README.md), [infra/README.md](infra/README.md).
 
 ```text
 React → POST /report-jobs (202)
@@ -175,7 +183,10 @@ React ← SSE /report-jobs/{jobId}/events, GET /report-jobs/{jobId}
 ## 검증
 
 ```powershell
-cd MyAnalyst\BE
+# MSA 6단계부터 BE는 services\generation-service, services\report-service로 나뉘었다.
+eport-service로 나뉘었다.
+eport-service로 나뉘었다.
+cd MyAnalyst\services\generation-service
 .\mvnw.cmd test -q
 
 cd ..\FE

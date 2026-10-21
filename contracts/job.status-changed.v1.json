@@ -1,0 +1,15 @@
+{
+  "job": {
+    "jobId": "2984b8fe-bb70-48a1-b232-a731858e1517",
+    "userId": "alice",
+    "traceId": "2b88f1abda33ab238348cf031c36a616",
+    "status": "RUNNING",
+    "progress": 26,
+    "message": "Generating section 2: Q4 results",
+    "attemptCount": 1,
+    "reportId": null,
+    "error": null,
+    "createdAt": "2026-10-20T23:41:50.151321Z",
+    "updatedAt": "2026-10-20T23:41:52.429840173Z"
+  }
+}

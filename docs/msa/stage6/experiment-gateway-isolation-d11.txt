@@ -1,0 +1,20 @@
+== E5 gateway routes (no BE catch-all)
+   GET /unknown -> 404
+   GET /swagger-ui.html -> 404
+   POST /dictionaries -> 404
+   GET /reports -> 200
+   GET /report-jobs/00000000-0000-0000-0000-000000000000 -> 404
+   GET /stocks/삼성전자 without a token -> 401
+   GET /stocks/삼성전자 #1 -> 200 in 0.23s: {'retrieved_at': '2026-10-21 00:18:22', 'data_timestamp_info': None, 'company_name': '삼성전자
+   GET /stocks/삼성전자 #2 -> 200 in 0.01s: {'retrieved_at': '2026-10-21 00:18:22', 'data_timestamp_info': None, 'company_name': '삼성전자
+   redis keys: ['market-data:stocks:삼성전자'] ttl: ['60']
+== E6 tables per database
+   user_db: users
+   report_db: event_publication, reports
+   generation_db: event_publication, report_job_attempt, report_jobs
+   chat_db: chat_reports, chats
+   dictionary_db: dictionary, dictionary_reports
+   myanalystdb: chat_reports, chats, dictionary, dictionary_reports, event_publication, report_job_attempt, report_jobs, reports, users
+== E7 D11: ask_llm with the OpenAI stub failing (generation-worker image, current code mounted)
+   stub failing (500): RAISED: InternalServerError Error code: 500 - {'error': {'message': 'stub failure', 'type': 'server_error'}}
+   stub healthy:       RETURNED: ### 스텁 섹션 ...

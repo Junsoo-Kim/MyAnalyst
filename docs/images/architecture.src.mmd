@@ -1,0 +1,60 @@
+%%{init: {"theme": "base", "securityLevel": "loose", "themeVariables": {"fontFamily": "'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif", "fontSize": "15px", "primaryColor": "#FFFFFF", "primaryBorderColor": "#D5D9E0", "primaryTextColor": "#1F2328", "lineColor": "#8A93A3", "clusterBkg": "#F3F4F6", "clusterBorder": "#E3E6EB", "titleColor": "#2B579A", "edgeLabelBackground": "#FFFFFF", "labelBackground": "#FFFFFF", "tertiaryColor": "#F3F4F6", "secondaryColor": "#F3F4F6"}, "flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 48, "padding": 14, "htmlLabels": true}}}%%
+flowchart TB
+  U["{{react}}<br/><b>사용자</b><br/>React 웹 화면"]:::user
+  GW["{{spring,redis:chip}}<br/><b>API 게이트웨이</b><br/>로그인 토큰(JWT) 확인<br/>서비스별 요청 전달<br/>로그인 시도 횟수 제한"]:::gateway
+  U --> GW
+
+  subgraph AUTH["회원 · 인증"]
+    A1["{{spring,redis}}<br/><b>인증 서비스</b><br/>로그인 · 토큰 발급"]
+    A2["{{spring,postgresql}}<br/><b>회원 서비스</b><br/>회원가입 · 계정 확인<br/><i>user_db</i>"]
+  end
+
+  subgraph CORE["보고서 생성"]
+    G1["{{spring,postgresql}}<br/><b>생성 작업 서비스</b><br/>작업 상태 관리 · 재시도<br/><i>generation_db</i>"]
+    R1["{{spring,postgresql}}<br/><b>보고서 서비스</b><br/>보고서 저장 · 조회 · 삭제<br/><i>report_db</i>"]
+  end
+
+  subgraph EXTRA["보고서 부가 기능"]
+    N1["{{spring}}<br/><b>알림 서비스</b><br/>진행률 실시간 전송(SSE)"]
+    D1["{{spring,postgresql}}<br/><b>용어 사전 서비스</b><br/>금융 용어 풀이<br/><i>dictionary_db</i>"]
+    C1["{{spring,postgresql}}<br/><b>AI 채팅 서비스</b><br/>보고서 기반 질의응답<br/><i>chat_db</i>"]
+  end
+
+  subgraph MARKET["시장 데이터"]
+    M1["{{fastapi,redis}}<br/><b>시세 · 뉴스 서비스</b><br/>주가 · 뉴스 수집, 캐시"]
+  end
+
+  subgraph AI["AI 처리 · Python"]
+    W["{{python,langgraph,openai}}<br/><b>생성 워커</b><br/>LangGraph 섹션 생성<br/>근거 부족 시 재검색"]
+    KN["{{fastapi}}<br/><b>지식 검색 서비스</b><br/>Dense + BM25 하이브리드"]
+    MV[("{{milvus}}<br/><b>Milvus</b><br/>벡터 검색")]:::store
+    OS[("{{opensearch}}<br/><b>OpenSearch</b><br/>키워드 검색")]:::store
+    QA["{{fastapi,openai}}<br/><b>질의응답 · 음성 인식</b><br/>답변 생성 · 음성→텍스트"]
+  end
+
+  GW --> AUTH
+  GW --> MARKET
+  GW --> CORE
+  GW --> EXTRA
+  A1 --> A2
+  W --> KN
+  KN --> MV
+  KN --> OS
+  C1 --> QA
+
+  G1 <-. "{{kafka:small}} 생성 요청 · 진행/완료" .-> W
+  G1 <-. "{{kafka:small}} 저장 요청 · 완료" .-> R1
+  R1 -. "{{kafka:small}} 보고서 생성 · 삭제" .-> D1
+  R1 -.-> C1
+  G1 -. "{{kafka:small}} 작업 상태" .-> N1
+
+  classDef default fill:#FFFFFF,stroke:#D5D9E0,stroke-width:1px,color:#1F2328
+  classDef user fill:#FFFFFF,stroke:#1F2328,stroke-width:1.5px,color:#1F2328
+  classDef gateway fill:#2B579A,stroke:#2B579A,color:#FFFFFF
+  classDef store fill:#EAF0F8,stroke:#B9C9E3,color:#2B579A
+  linkStyle 10,11,12,13,14 stroke:#2B579A,stroke-width:1.6px
+  style AUTH fill:#F3F4F6,stroke:#E3E6EB,color:#2B579A
+  style CORE fill:#F3F4F6,stroke:#E3E6EB,color:#2B579A
+  style EXTRA fill:#F3F4F6,stroke:#E3E6EB,color:#2B579A
+  style MARKET fill:#F3F4F6,stroke:#E3E6EB,color:#2B579A
+  style AI fill:#EEF2F8,stroke:#D3DCEA,color:#2B579A

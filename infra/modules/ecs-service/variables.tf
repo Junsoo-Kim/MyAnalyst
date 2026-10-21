@@ -3,7 +3,7 @@ variable "name_prefix" {
 }
 
 variable "service_name" {
-  description = "예: be, rag-server. Service Connect 내부 DNS 이름(예: http://rag-server:8000)으로도 쓰인다."
+  description = "예: api-gateway, report-service, qa. Service Connect 내부 DNS 이름(예: http://qa:8000)으로도 쓰인다."
   type        = string
 }
 
@@ -23,8 +23,9 @@ variable "subnets" {
   type = list(string)
 }
 
-variable "security_group_id" {
-  type = string
+variable "security_group_ids" {
+  description = "태스크에 붙일 SG 목록 (모든 서비스: services SG, api-gateway는 gateway SG 추가)"
+  type        = list(string)
 }
 
 variable "image" {
@@ -91,7 +92,7 @@ variable "capacity_provider_strategy" {
 }
 
 variable "target_group_arn" {
-  description = "ALB에 붙는 서비스(BE)만 지정. 내부 전용 서비스(RAG)는 null로 둔다."
+  description = "ALB에 붙는 서비스(api-gateway)만 지정. 내부 전용 서비스는 null로 둔다."
   type        = string
   default     = null
 }
