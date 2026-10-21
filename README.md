@@ -1,5 +1,5 @@
 > 2025년 소프트웨어융합학과 졸업논문 | 개인 프로젝트 (기여도 100%)
-> 기획·데이터 파이프라인·백엔드·프론트엔드·RAG 서버·AWS 배포 전 과정 단독 수행
+> 기획·데이터 파이프라인·백엔드·프론트엔드·RAG 파이프라인·MSA 전환·AWS 인프라 설계(IaC) 전 과정 단독 수행
 > 개발 기간: 2025.03 ~ 2025.12
 
 ## 프로젝트 소개
@@ -149,8 +149,9 @@ RAG는 대규모 데이터를 빠르고 정확하게 검색한 후, 이를 바�
 백엔드
 
 - 언어: Java
-- 프레임워크: Spring Boot
-- 데이터베이스: PostgreSQL
+- 프레임워크: Spring Boot, Spring Cloud Gateway(JWT RS256 검증)
+- 이벤트: Spring Modulith(이벤트 레지스트리, Transactional Outbox), Apache Kafka
+- 데이터베이스: PostgreSQL(서비스별 database), Redis
 - 의존성 관리: Maven
 - JSON 처리: ObjectMapper
 
@@ -158,25 +159,24 @@ RAG는 대규모 데이터를 빠르고 정확하게 검색한 후, 이를 바�
 
 - 언어: JavaScript
 - 프레임워크: React
-- 데이터베이스: Redis
 - 상태 관리: React Hooks
 - 라우팅: React Route
 - 스타일링: Bootstrap 5, Bootstrap Icons
 - 마크다운 렌더링: Marked
 
-RAG 서버
+AI 서비스(Python)
 
 - 언어: Python
-- 프레임워크: FastAPI
+- 프레임워크: FastAPI (knowledge, generation-worker, qa, stt, market-data)
 - 벡터 데이터베이스: Milvus
 - 파이프라인 오케스트레이션: LangGraph
-- 검색: Dense(KLUE-BERT 임베딩) + Sparse(BM25, rank_bm25) 하이브리드, RRF 병합
+- 검색: Dense(KLUE-BERT 임베딩) + Sparse(BM25, OpenSearch·KLUE-BERT WordPiece 토큰) 하이브리드, RRF 병합
 - OCR 처리: Naver Clova OCR
 - 자연어 처리: KoNLPy, KLUE-BERT
 
 인프라
 
-- 컨테이너: Docker, Docker Compose(로컬), AWS ECS Fargate(배포)
+- 컨테이너: Docker, Docker Compose(로컬), AWS ECS Fargate
 - 메시징: Apache Kafka (KRaft), Spring Modulith 이벤트 레지스트리(Transactional Outbox)
 - IaC: Terraform (VPC/ECS/RDS/ElastiCache/ALB/Kafka EC2/관측성 등 모듈화)
 - AWS: ECS Fargate(서비스 13개, Service Connect), ALB, RDS(PostgreSQL, 서비스별 database), ElastiCache(Redis), EC2(Kafka, Milvus·OpenSearch), ECR, Secrets Manager, CloudWatch, IAM(OIDC)
@@ -184,48 +184,52 @@ RAG 서버
 
 ## 기술적 도전과제
 
-### 1. 하이브리드 검색(Dense + BM25) 및 RRF 도입
+### 1. LangGraph 기반 RAG 파이프라인 설계
 
 Challenge:
-1번 챌린지에서 구축한 RAG 시스템은 Milvus의 코사인/L2 거리 기반 Dense 벡터 검색만 사용했습니다. 그러나 금융 도메인 텍스트는 수치, 고유명사, 재무 식별자가 자연어 문장과 섞여 있는 경우가 많아, 의미 기반 검색만으로는 정확한 키워드 일치가 중요한 문서를 놓치는 한계가 있었습니다.
-
-Solution:
-
-- Sparse 인덱스 자체 구축: 당시 사용 중인 Milvus 2.4 standalone은 자체 BM25/Sparse 인덱스를 지원하지 않아, `rank_bm25` 라이브러리로 별도의 스파스 인덱스를 구축했습니다.
-- 의존성 최소화한 토크나이징: BM25용 형태소 분석기로 KoNLPy 등을 새로 도입하는 대신, 이미 임베딩에 쓰고 있던 KLUE-BERT의 WordPiece 토크나이저를 재사용해 컨테이너 이미지와 배포 복잡도를 늘리지 않았습니다.
-- RRF(Reciprocal Rank Fusion) 병합: Dense(거리, 작을수록 좋음)와 Sparse(BM25 점수, 클수록 좋음)는 점수 스케일이 완전히 달라 직접 정규화해 섞기 어렵습니다. 대신 각 검색기 결과 내에서의 순위만 이용하는 RRF(`score = Σ 1/(k+rank+1)`)로 병합해, 두 검색기에서 동시에 상위권에 오른 문서가 최종적으로 상위에 오도록 설계했습니다.
-- 안전한 롤백 경로: `HYBRID_SEARCH_ENABLED` 환경변수로 언제든 기존 Dense-only 검색으로 즉시 되돌릴 수 있게 했고, Sparse 인덱스 구축이 실패하거나 코퍼스가 비어 있어도 Dense 결과로 자동 폴백하도록 만들었습니다.
-
-Achievement:
-서버 기동 시 BM25 인덱스를 미리 구축하도록 했고, 실제 Milvus 데이터로 인덱스가 정상 구축되는지, RRF 병합 점수가 설계한 공식대로 계산·정렬되는지, 데이터가 없을 때 Dense-only로 안전하게 폴백하는지를 확인할 수 있었습니다.
-
-### 2. LangGraph 기반 Corrective RAG로 환각 억제
-
-Challenge:
-기존 파이프라인은 "키워드 생성 → 검색 → 생성"이 단 한 번만 실행되는 완전 선형 구조였습니다. 검색된 문서가 부실하거나 LLM이 컨텍스트를 벗어난 내용을 생성해도, 파이프라인 스스로 이를 감지하고 고칠 방법이 없었습니다.
+기존 파이프라인은 "키워드 생성 → 검색 → 생성"이 단 한 번만 실행되는 완전 선형 구조였습니다. 검색된 문서가 부실하거나 LLM이 컨텍스트를 벗어난 내용을 생성해도, 파이프라인 스스로 이를 감지하고 고칠 방법이 없었습니다. 또 보고서 한 건을 만드는 데 수 분이 걸리는데 API 서버가 HTTP로 동기 대기하고 있어, 생성 서버의 장애가 곧바로 사용자 요청 실패로 이어졌습니다.
 
 Solution:
 
 - 상태 그래프 설계: LangGraph로 `generate_keywords → retrieve → grade_documents → generate_section → grade_hallucination`을 잇고, 근거가 부족하다고 판정되면 `rewrite_query`로 검색 키워드를 다시 만들어 재검색하는 조건부 루프를 추가했습니다.
 - 비용을 고려한 채점 설계: 검색된 문서마다 개별적으로 LLM을 호출하면 호출 수가 top-k만큼 늘어나므로, 문서 관련성 채점은 후보 전체를 한 번의 배치 호출로 처리하도록 설계했습니다.
 - Fail-open 채점: 관련성 채점과 환각 채점 모두, 채점 자체가 실패(API 오류 등)하면 통과시키는 방향으로 설계해 채점 로직의 장애가 보고서 생성 전체를 막지 않도록 했습니다.
+- 생성을 Kafka 워커로 분리: 생성 요청을 Kafka로 받는 워커로 바꾸고, 긴 작업 중에는 파티션을 pause한 채 poll을 계속해 `max.poll.interval.ms` 초과로 소비자 그룹에서 쫓겨나지 않게 했습니다. 상태 전이는 "현재 상태 + 시도 번호"로 판정해 같은 메시지가 여러 번 와도 한 번만 처리됩니다.
+- 섹션 체크포인트와 재시도: 섹션마다 결과를 저장해 워커가 중간에 죽어도 끝난 섹션은 다시 생성하지 않습니다. LLM 오류는 오류 문구를 답변으로 돌려주는 대신 예외로 올려, 오류 문구가 담긴 보고서가 성공으로 저장되지 않고 백오프 후 재시도되게 했습니다.
 
 Achievement:
-LLM 호출부만 스텁으로 대체해 그래프 전체를 실제로 실행하는 방식으로 제어 흐름을 검증했습니다 - "1차 생성 → 근거 부족 판정 → 쿼리 재작성 → 재검색 → 재생성 → 근거 통과 판정 → 종료"로 이어지는 재시도 루프가 설계한 그대로 동작시킬 수 있었습니다.
+LLM 호출부만 스텁으로 대체해 그래프 전체를 실제로 실행하는 방식으로 제어 흐름을 검증했습니다 - "1차 생성 → 근거 부족 판정 → 쿼리 재작성 → 재검색 → 재생성 → 근거 통과 판정 → 종료"로 이어지는 재시도 루프가 설계한 그대로 동작했습니다. 같은 조건(poll 간격 10초, 작업 20초 이상)에서 poll 루프 안에서 동기 처리하는 소비자는 같은 메시지를 4번 재처리하고 다음 메시지로 넘어가지 못한 반면, 설계한 워커는 각 보고서를 한 번만 처리했습니다. 섹션 생성 중 워커를 강제 종료하면 재기동 후 완료된 섹션을 체크포인트에서 복원해 LLM 호출이 22회에서 14회로 줄었고, 검색 서비스를 내렸을 때는 시도 1·2가 실패한 뒤 서비스 복구 후 시도 3에서 성공했습니다.
 
-### 3. AWS 인프라 분리 설계 및 코드화(Terraform)
+### 2. Spring Modulith를 이용한 MSA 구조 전환
 
 Challenge:
-AWS Academy 교육을 계기로 직접 인프라를 배포·운영해보고자 했습니다. 초기에는 인스턴스 1대에 백엔드, AI 연산, DB를 모두 올리는 방식으로 접근했는데, 임베딩 연산과 DB 검색이 동시에 몰리는 상황에서 자원 고갈로 인한 단일 장애점(SPOF)이 발생했습니다. 이 경험을 계기로 인프라를 근본적으로 재설계하고, 콘솔에서 클릭으로 만드는 대신 재현 가능한 코드로 관리하기로 했습니다.
+Spring Boot 모놀리스 하나에 인증, 보고서, 보고서 생성, 용어 사전, 채팅, 알림이 직접 호출로 엮여 있어 한 기능의 장애나 배포가 전체에 영향을 줬습니다. 모듈 경계가 코드로 강제되지 않은 상태에서 한 번에 서비스로 쪼개면, 숨어 있던 의존이 런타임 오류로 드러날 위험이 컸습니다.
 
 Solution:
 
-- 계층 분리: 진입점(ALB → api-gateway), 서비스 계층(ECS Fargate 서비스 13개, Service Connect), 데이터 계층(RDS/ElastiCache/Kafka EC2/Milvus·OpenSearch EC2)을 VPC 안에서 나눴습니다. 보안그룹은 "바로 앞 계층에서만" 인바운드를 허용하는 체인입니다 (인터넷 → ALB → api-gateway → 서비스 → 데이터 계층). 구성 상세는 [infra/README.md](infra/README.md).
-- 컨테이너 오케스트레이션과 수평 확장: 서비스마다 ECS 서비스로 두고 CPU 사용률 기반 오토스케일링을 붙여, 인스턴스 분리만으로는 해결되지 않던 "계층 내부의 단일 인스턴스 SPOF"까지 줄였습니다. 서비스 사이의 비동기 흐름(보고서 생성, 저장 Saga, 사본 동기화)은 Kafka로 잇습니다.
-- 비용 최적화: 다시 해도 되는 연산(검색, 생성 워커, Q&A, STT)은 온디맨드 1개 + Fargate Spot 위주로, 진입점과 상태 전이를 맡는 서비스는 온디맨드로 구성해 안정성과 비용을 나눠 가져갔습니다.
-- 관측성: ALB 5xx/헬스체크, RDS, ElastiCache, ECS 서비스별 CPU에 더해 Kafka consumer lag(그룹별)와 DLT 신규 메시지(토픽별) CloudWatch 알람을 SNS로 연결해, 장애를 사후 복구가 아니라 사전에 감지할 수 있게 했습니다.
-- CI/CD와 보안: GitHub Actions가 장기 보관되는 AWS 액세스키 없이 OIDC로 임시 자격증명만 받아 배포하도록 구성했고, 그 IAM 역할의 권한도 ECR 푸시/해당 ECS 서비스 업데이트로만 좁혔습니다. OpenAI 키, 서비스 간 공유 비밀, JWT 서명 키는 Secrets Manager에서 태스크에 주입합니다.
-- 점진적으로 켤 수 있는 설계: 도메인이 아직 없어 HTTPS는 ACM 인증서 ARN의 유무로 켜지고 꺼지는 조건부 리소스로 만들어뒀습니다 - 나중에 인증서만 발급받으면 코드 변경 없이 활성화됩니다.
+- 경계 먼저 고정: Spring Modulith로 모듈 경계를 테스트로 검증하고, JPA 연관관계를 ID 참조로, 모듈 간 직접 호출을 이벤트로 바꾼 뒤에 분리를 시작했습니다.
+- Outbox + Kafka: 이벤트는 Modulith 이벤트 레지스트리로 비즈니스 변경과 같은 트랜잭션에 기록하고, 커밋 후 Kafka로 내보냅니다. 소비 실패는 지수 백오프로 재시도한 뒤 DLT로 보내 한 메시지가 파티션 전체를 막지 않게 했습니다.
+- 단계적 분리: 이벤트로만 연결된 기능(알림, 용어 사전, 채팅)부터 떼고 핵심(보고서, 보고서 생성)을 마지막에 떼어 서비스 13개로 나눴습니다. 인증은 API Gateway(JWT RS256 검증)와 auth/user 서비스로 분리했습니다.
+- 동기 호출 없는 소유권 확인: 각 서비스가 `report.created` 이벤트로 받은 사본(소유자, 본문)으로 권한을 판단해, 보고서 서비스가 내려가도 용어 사전과 채팅이 동작합니다. 삭제도 같은 compacted 토픽에 같은 key로 보내, 소비자가 처음부터 다시 읽어도(재생) 삭제된 보고서가 되살아나지 않습니다.
+- 보고서 저장 Saga: "생성 완료 → 저장 명령 → 저장 완료 이벤트 → Job 완료"를 명령 토픽으로 잇고 모든 단계를 멱등하게 만들었습니다.
+- 서비스별 database와 인프라 코드화: 서비스마다 database를 나누고 기존 데이터를 옮기는 이전 스크립트를 만들었습니다. Terraform은 서비스별 ECS 서비스(ALB 뒤에는 Gateway 하나), Kafka EC2, Secrets Manager, consumer lag·DLT CloudWatch 알람 구성으로 코드화했습니다. 구성 상세는 [infra/README.md](infra/README.md).
 
 Achievement:
-클라우드에 실제로 올리기 전, 로컬 Docker Compose로 동일한 3계층 통신 경로(BE → RAG → Milvus/RDS/Redis)를 실제로 띄워 헬스체크와 서비스 간 통신을 확인했고, Redis 캐싱도 실제 요청을 통해 캐시 히트가 발생하는 것까지 검증했습니다.
+docker compose로 장애·재처리 시나리오를 재현해 검증했습니다. 보고서 200개 중 20개를 삭제한 상태에서 채팅 서비스의 사본을 비우고 offset을 처음으로 되돌리자, 메시지 228개를 7.7초 만에 다시 읽어 사본 182개를 복원했고 삭제된 보고서는 하나도 되살아나지 않았습니다. 보고서 서비스를 내린 채 생성을 끝내면 Job이 SAVING 상태로 기다리다가 서비스 재시작 6.9초 뒤 완료됐고, 완료 이벤트 3번·저장 명령 2번이 다시 와도 보고서는 1개만 저장됐습니다. 공용 DB의 실제 데이터를 서비스별 database로 옮겨 8개 테이블의 행 수가 원본과 일치하는 것도 확인했습니다.
+
+### 3. RAG 검색 품질 개선
+
+Challenge:
+1번에서 구축한 파이프라인의 검색은 Milvus의 코사인/L2 거리 기반 Dense 벡터 검색만 사용했습니다. 그러나 금융 도메인 텍스트는 수치, 고유명사, 재무 식별자가 자연어 문장과 섞여 있는 경우가 많아, 의미 기반 검색만으로는 정확한 키워드 일치가 중요한 문서를 놓치는 한계가 있었습니다.
+
+Solution:
+
+- 하이브리드 검색: Dense 검색에 BM25 Sparse 검색을 더했습니다. 당시 사용 중인 Milvus 2.4 standalone은 자체 BM25/Sparse 인덱스를 지원하지 않아 별도의 스파스 인덱스를 두었습니다.
+- RRF(Reciprocal Rank Fusion) 병합: Dense(거리, 작을수록 좋음)와 Sparse(BM25 점수, 클수록 좋음)는 점수 스케일이 완전히 달라 직접 정규화해 섞기 어렵습니다. 대신 각 검색기 결과 내에서의 순위만 이용하는 RRF(`score = Σ 1/(k+rank+1)`)로 병합해, 두 검색기에서 동시에 상위권에 오른 문서가 최종적으로 상위에 오도록 설계했습니다.
+- BM25를 OpenSearch로 분리: 워커마다 전체 문서를 메모리에 올리던 `rank_bm25` 인덱스를 OpenSearch 공용 색인으로 옮겨, 워커 수만큼 메모리를 중복으로 쓰지 않고 새 문서 반영에 재시작이 필요 없게 했습니다.
+- 한국어 토큰화 문제 해결: OpenSearch 기본 분석기는 조사를 떼지 못해 "영업이익은"과 "영업이익"을 다른 토큰으로 보고 검색에 실패했습니다. 형태소 분석기를 새로 들이는 대신 이미 임베딩에 쓰던 KLUE-BERT WordPiece 토크나이저로 색인과 질의를 모두 미리 토큰화해 해결했습니다.
+- 인덱스 버그 수정: IVF_FLAT 빌드 파라미터에 검색용 `nprobe`가 들어가 인덱스가 만들어지지 않던 문제와, 삽입 후 flush 누락으로 적재 건수가 0으로 보이던 문제를 고쳤습니다.
+- 안전한 롤백 경로: `HYBRID_SEARCH_ENABLED` 환경변수로 언제든 기존 Dense-only 검색으로 즉시 되돌릴 수 있게 했고, Sparse 검색이 실패하거나 코퍼스가 비어 있어도 Dense 결과로 자동 폴백하도록 만들었습니다.
+
+Achievement:
+문서를 실제로 색인하고 같은 질의로 검색해 정답 문서가 오답 문서보다 높은 점수로 나오는 것을 확인했고, 전체 스택에서 검색 API가 Dense와 BM25 결과를 RRF로 합쳐 돌려주는 것까지 검증했습니다. 또 RRF 병합 점수가 설계한 공식대로 계산·정렬되는지, 데이터가 없을 때 Dense-only로 안전하게 폴백하는지를 확인할 수 있었습니다.
