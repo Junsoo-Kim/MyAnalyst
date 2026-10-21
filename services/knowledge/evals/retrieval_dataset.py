@@ -124,17 +124,29 @@ def relevant_chunk_keys(corpus: Dict[str, dict], article_id: str, sentence_sha1:
     target = next((s for s in split_sentences(corpus[article_id]["body"]) if sha1(s) == sentence_sha1), None)
     if target is None:
         return []
-    target_words = set(eojeols(target))
     keys = []
     for other_id, article in corpus.items():
         for index, chunk in enumerate(chunk_article(article["body"])):
-            # 같은 문장이거나, 매체마다 앞뒤 몇 어절만 다른 거의 같은 문장(어절 집합 Jaccard 0.8 이상)이면 정답이다.
+            # 같은 문장이거나, 다른 매체가 조금 고쳐 쓴 거의 같은 문장(near_duplicate)이면 정답이다.
             for sentence in split_sentences(chunk):
-                words = set(eojeols(sentence))
-                if sentence == target or (words and len(words & target_words) / len(words | target_words) >= 0.8):
+                if sentence == target or near_duplicate(sentence, target):
                     keys.append(f"{other_id}:{index}")
                     break
     return sorted(set(keys))
+
+
+def _bigrams(text: str) -> set:
+    compact = re.sub(r"[^가-힣A-Za-z0-9]", "", text)
+    return {compact[i:i + 2] for i in range(len(compact) - 1)}
+
+
+def near_duplicate(a: str, b: str, threshold: float = 0.6) -> bool:
+    """같은 보도자료를 매체마다 조금씩 고쳐 쓴 문장인가. 글자 2-gram의 겹침 계수(|A∩B| / min(|A|,|B|))로 본다.
+    "64만9천351주로"와 "64만 9,351주로", 한쪽이 다른 쪽에 문장을 덧붙인 경우도 같은 문장으로 잡힌다."""
+    x, y = _bigrams(a), _bigrams(b)
+    if not x or not y:
+        return False
+    return len(x & y) / min(len(x), len(y)) >= threshold
 
 
 def content_overlap(query: str, sentence: str) -> float:
