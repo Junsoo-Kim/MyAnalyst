@@ -1,8 +1,9 @@
 # 검색 설정 비교 평가 (Dense / BM25 / 하이브리드)
 
-같은 문서·같은 질의로 검색 설정만 바꿔 비교한다. 데이터는 두 가지다.
+같은 문서·같은 질의로 검색 설정만 바꿔 비교한다. 데이터는 세 가지다.
 - **자체 데이터:** 셀트리온 뉴스, 정답 문장 300개 × 질의 3종
 - **공개 벤치마크:** Ko-StrategyQA, 질의 592개, 사람이 정답 라벨링
+- **공개 벤치마크:** AutoRAGRetrieval, 금융·공공·법률·커머스 PDF 문서, 질의 114개, 사람이 정답 라벨링
 
 OpenAI는 호출하지 않는다. 결과는 평균, 95% 신뢰구간, 짝지은 유의성 검정으로 낸다.
 
@@ -35,7 +36,8 @@ OPENAI_API_KEY=stub docker compose -p myanalyst-eval up -d --wait etcd minio mil
 docker compose -p myanalyst-eval run --rm --no-deps -v ./services/knowledge:/src -v <hf-cache-dir>:/hfcache \
   -e PYTHONPATH=/src -w /src knowledge python -m evals.retrieval_comparison_eval   # 자체 데이터, CPU 약 19분
 docker compose -p myanalyst-eval run --rm --no-deps -v ./services/knowledge:/src -v <hf-cache-dir>:/hfcache \
-  -e PYTHONPATH=/src -w /src knowledge python -m evals.public_benchmark_eval       # 공개 벤치마크, CPU 약 45분
+  -e PYTHONPATH=/src -w /src knowledge python -m evals.public_benchmark_eval       # Ko-StrategyQA, CPU 약 45분
+docker compose -p myanalyst-eval run --rm --no-deps -v ./services/knowledge:/src -v <hf-cache-dir>:/hfcache   -e PYTHONPATH=/src:/tmp/pydeps -e PIP_CACHE_DIR=/tmp/pipcache -w /src --entrypoint sh knowledge   -c "pip install -q --target /tmp/pydeps pyarrow && python -m evals.public_benchmark_eval autorag"  # AutoRAGRetrieval, CPU 약 4분
 OPENAI_API_KEY=stub docker compose -p myanalyst-eval down -v
 ```
 
@@ -45,7 +47,7 @@ OPENAI_API_KEY=stub docker compose -p myanalyst-eval down -v
   - `retrieval_comparison_eval.py`: 자체 데이터 평가
   - `public_benchmark_eval.py`: 공개 벤치마크 평가
 - **격리:** 평가 전용 Milvus 컬렉션과 OpenSearch 인덱스를 만들고 끝나면 지운다. 운영 인덱스(`myanalyst-chunks`)는 건드리지 않는다.
-- **결과 파일:** `results/retrieval_comparison.json`, `results/public_benchmark_ko_strategyqa.json`(질의별 상위 20개 순위 포함).
+- **결과 파일:** `results/retrieval_comparison.json`, `results/public_benchmark_ko_strategyqa.json`, `results/public_benchmark_autorag.json`(질의별 상위 20개 순위 포함).
 
 ## 비교한 설정
 
@@ -146,6 +148,30 @@ MRR@10:
 | hybrid_bm25x2 | 0.845 | 0.747 | 0.549 | 0.566 |
 | **hybrid_ko** | **0.902 [0.877–0.926]** | **0.847** | **0.689** | **0.713** |
 | hybrid_ko_bm25x2 | 0.845 | 0.747 | 0.657 | 0.697 |
+
+## 공개 벤치마크 (AutoRAGRetrieval, test)
+
+- **데이터:** Hugging Face `mteb/AutoRAGRetrieval`. Allganize RAG 리더보드 데이터를 MTEB 한국어 검색 과제로 옮긴 것이다.
+  - PDF 문서 페이지 720개(금융 110, 공공 152, 법률 282, 커머스 176), 질의 114개(금융 22개), 질의당 정답 페이지 1개(사람 라벨)
+  - 질의당 정답이 1개라 Recall@20과 Hit@20이 같다.
+- **목적:** Ko-StrategyQA는 일반 지식 문단이라 금융 문서가 없다. 금융 기관 보고서가 포함된 공개 데이터에서도 같은 경향이 나오는지 확인한다.
+
+| 설정 | Hit@10 | Hit@20 (= Recall@20) | nDCG@10 | MRR@10 |
+|---|---|---|---|---|
+| dense_klue (원래) | 0.632 [0.535–0.719] | 0.719 [0.632–0.798] | 0.456 | 0.399 |
+| dense_ko | 0.789 | 0.868 | 0.670 | 0.632 |
+| bm25_standard | 0.921 | 0.956 | 0.800 | 0.762 |
+| **bm25_wordpiece** | **0.982** | 0.991 | **0.906** | **0.881** |
+| **hybrid (현재)** | 0.947 [0.904–0.982] | 0.991 [0.974–1.000] | 0.708 | 0.634 |
+| hybrid_bm25x2 | 0.965 | 0.991 | 0.747 | 0.679 |
+| hybrid_ko | 0.965 | **1.000** | 0.800 | 0.747 |
+| hybrid_ko_bm25x2 | 0.965 | 0.991 | 0.825 | 0.780 |
+
+- **도입 전후(Dense 단독 → 하이브리드):** Hit@10 +31.6%p, Recall@20 +27.2%p, nDCG@10 +0.252, 모두 p<0.001.
+- **BM25 단독 → 하이브리드:** Recall@20은 같고(0.991), 순위 지표는 하이브리드가 낮다(nDCG@10 0.906 → 0.708, p<0.001).
+  문서가 720개뿐이고 질의가 원문과 어휘를 많이 공유해 BM25만으로 거의 만점이 나오는 쉬운 데이터라, 하이브리드가 보탤 여지가 없다.
+- **임베딩 모델(klue → ko-sroberta):** 하이브리드 nDCG@10 0.708 → 0.800(p=0.003). Ko-StrategyQA와 같은 방향이다.
+- **금융 질의 22개만:** Dense Hit@20 77.3% → 하이브리드 100%. 표본이 작아 따로 결론을 내지 않는다.
 
 ## 해석
 

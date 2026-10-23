@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <title>검색 품질 개선 전후</title>
 <!--
-  README 3번 도전과제용 표. 수치는 services/knowledge/evals/results/*.json(RETRIEVAL_COMPARISON.md)과 같다.
+  README 3번 도전과제용 표. 수치는 services/knowledge/evals/results/public_benchmark_autorag.json과 같다.
   개선 전 = Dense 단독, 개선 후 = Dense + BM25 하이브리드(RRF).
-  Hit@20, Hit@10 = 자체 데이터(셀트리온 뉴스 질의 900개), Recall@20, nDCG@10 = 공개 벤치마크(Ko-StrategyQA 질의 592개).
+  모든 수치 = 공개 벤치마크 AutoRAGRetrieval(mteb/AutoRAGRetrieval, 질의 114개, results/public_benchmark_autorag.json).
+  질의마다 정답 페이지가 1개라 Recall@20과 Hit@20이 같으므로 Hit@20은 표에서 뺐다.
   PNG 만들기: python docs/images/build_table.py
 -->
 <style>
@@ -35,10 +36,9 @@
       <tr><th>지표</th><th>개선 전</th><th>개선 후</th></tr>
     </thead>
     <tbody>
-      <tr><td><span class="name">Hit@20</span><span class="desc">(상위 20개 안에 정답 포함 여부)</span></td><td class="before">48.2%</td><td class="after">91.9%</td></tr>
-      <tr><td><span class="name">Hit@10</span><span class="desc">(상위 10개 안에 정답 포함 여부)</span></td><td class="before">41.9%</td><td class="after">87.3%</td></tr>
-      <tr><td><span class="name">Recall@20</span><span class="desc">(정답 문서 중 상위 20개에서 찾은 비율)</span></td><td class="before">46.7%</td><td class="after">75.0%</td></tr>
-      <tr><td><span class="name">nDCG@10</span><span class="desc">(정답이 상위 10개 중 얼마나 위에 있는지)</span></td><td class="before">0.287</td><td class="after">0.506</td></tr>
+      <tr><td><span class="name">Hit@10</span><span class="desc">(상위 10개 안에 정답 포함 여부)</span></td><td class="before">63.2%</td><td class="after">94.7%</td></tr>
+      <tr><td><span class="name">Recall@20</span><span class="desc">(정답 문서 중 상위 20개에서 찾은 비율)</span></td><td class="before">71.9%</td><td class="after">99.1%</td></tr>
+      <tr><td><span class="name">nDCG@10</span><span class="desc">(정답이 상위 10개 중 얼마나 위에 있는지)</span></td><td class="before">0.456</td><td class="after">0.708</td></tr>
     </tbody>
   </table>
 </body>

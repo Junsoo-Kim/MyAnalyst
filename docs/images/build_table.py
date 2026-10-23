@@ -11,7 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 EDGE = os.getenv("EDGE", r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
-WIDTH, HEIGHT = 900, 314
+WIDTH, HEIGHT = 900, 256
 
 
 def main() -> int:
